@@ -302,7 +302,7 @@ class LogTest extends JUnitSuite {
       assertEquals("Still no change in the logEndOffset", currOffset, log.logEndOffset)
       assertEquals("Should still be able to append and should get the logEndOffset assigned to the new append",
                    currOffset,
-                   log.append(TestUtils.singleMessageSet("hello".toString.getBytes)).firstOffset)
+                   log.append(TestUtils.singleMessageSet("hello".getBytes)).firstOffset)
 
       // cleanup the log
       log.delete()
