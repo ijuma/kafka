@@ -230,7 +230,7 @@ object CoreUtils extends Logging {
   def createObject[T<:AnyRef](className: String, args: AnyRef*): T = {
     val klass = Class.forName(className).asInstanceOf[Class[T]]
     val constructor = klass.getConstructor(args.map(_.getClass): _*)
-    constructor.newInstance(args: _*).asInstanceOf[T]
+    constructor.newInstance(args: _*)
   }
 
   /**
