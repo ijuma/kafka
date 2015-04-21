@@ -102,7 +102,7 @@ object CoreUtils extends Logging {
    * Recursively delete the list of files/directories and any subfiles (if any exist)
    * @param files sequence of files to be deleted
    */
-  def rm(files: Seq[String]): Unit = files.map(f => rm(new File(f)))
+  def rm(files: Seq[String]): Unit = files.foreach(f => rm(new File(f)))
 
   /**
    * Recursively delete the given file/directory and any subfiles (if any exist)
