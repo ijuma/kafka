@@ -55,7 +55,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
             throw new IllegalArgumentException("Topic must be non-null.");
         List<List<ConsumerRecord<K, V>>> recs = new ArrayList<List<ConsumerRecord<K, V>>>();
         for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : records.entrySet()) {
-            if (entry.getKey().equals(topic))
+            if (entry.getKey().topic().equals(topic))
                 recs.add(entry.getValue());
         }
         return new ConcatenatedIterable<K, V>(recs);

@@ -304,7 +304,7 @@ public class ConsumerConfig extends AbstractConfig {
         return newProperties;
     }
 
-    ConsumerConfig(Map<? extends Object, ? extends Object> props) {
+    ConsumerConfig(Map<?, ?> props) {
         super(CONFIG, props);
     }
 

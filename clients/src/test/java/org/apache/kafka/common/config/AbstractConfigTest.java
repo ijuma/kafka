@@ -73,7 +73,7 @@ public class AbstractConfigTest {
                                             METRIC_REPORTER_CLASSES_DOC);
         }
 
-        public TestConfig(Map<? extends Object, ? extends Object> props) {
+        public TestConfig(Map<?, ?> props) {
             super(CONFIG, props);
         }
     }
