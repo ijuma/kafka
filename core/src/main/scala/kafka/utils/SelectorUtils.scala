@@ -24,6 +24,12 @@ import org.apache.kafka.common.utils.{Time => JTime}
 
 object SelectorUtils {
 
+  def pollUntil(selector: Selector, timeout: Long)(predicate: => Boolean)(implicit time: JTime): Unit =
+    pollUntilFound(selector, timeout) {
+      if (predicate) Some(true)
+      else None
+    }
+
   def pollUntilFound[T](selector: Selector, timeout: Long)(find: => Option[T])(implicit time: JTime): Option[T] = {
     var result: Option[T] = None
     // for consistency with `Selector.poll`
