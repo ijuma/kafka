@@ -20,7 +20,7 @@ from ducktape.mark import matrix
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.kafka.version import TRUNK, KafkaVersion
+from kafkatest.services.kafka.version import TRUNK, KafkaVersion, LATEST_0_9
 from kafkatest.services.performance import ProducerPerformanceService, EndToEndLatencyService, ConsumerPerformanceService, throughput, latency, compute_aggregate_throughput
 
 
@@ -64,11 +64,22 @@ class Benchmark(Test):
         self.kafka.log_level = "INFO"  # We don't DEBUG logging here
         self.kafka.start()
 
-    @parametrize(acks=1, topic=TOPIC_REP_ONE)
-    @parametrize(acks=1, topic=TOPIC_REP_THREE)
-    @parametrize(acks=-1, topic=TOPIC_REP_THREE)
-    @parametrize(acks=1, topic=TOPIC_REP_THREE, num_producers=3)
-    @matrix(acks=[1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000], security_protocol=['PLAINTEXT', 'SSL'])
+    # @parametrize(acks=1, topic=TOPIC_REP_ONE)
+    # @parametrize(acks=1, topic=TOPIC_REP_THREE)
+    # @parametrize(acks=-1, topic=TOPIC_REP_THREE)
+    # @parametrize(acks=1, topic=TOPIC_REP_THREE, num_producers=3)
+    @parametrize(acks=1, topic=TOPIC_REP_THREE, message_size=10, num_producers=1, security_protocol='PLAINTEXT', client_version=str(LATEST_0_9), broker_version=str(LATEST_0_9))
+    @parametrize(acks=1, topic=TOPIC_REP_THREE, message_size=10, num_producers=1, security_protocol='PLAINTEXT', client_version=str(TRUNK), broker_version=str(TRUNK))
+    @parametrize(acks=1, topic=TOPIC_REP_THREE, message_size=100, num_producers=1, security_protocol='PLAINTEXT', client_version=str(LATEST_0_9), broker_version=str(LATEST_0_9))
+    @parametrize(acks=1, topic=TOPIC_REP_THREE, message_size=100, num_producers=1, security_protocol='PLAINTEXT', client_version=str(TRUNK), broker_version=str(TRUNK))
+    @parametrize(acks=1, topic=TOPIC_REP_THREE, message_size=1000, num_producers=1, security_protocol='PLAINTEXT', client_version=str(LATEST_0_9), broker_version=str(LATEST_0_9))
+    @parametrize(acks=1, topic=TOPIC_REP_THREE, message_size=1000, num_producers=1, security_protocol='PLAINTEXT', client_version=str(TRUNK), broker_version=str(TRUNK))
+    @parametrize(acks=1, topic=TOPIC_REP_THREE, message_size=10000, num_producers=1, security_protocol='PLAINTEXT', client_version=str(LATEST_0_9), broker_version=str(LATEST_0_9))
+    @parametrize(acks=1, topic=TOPIC_REP_THREE, message_size=10000, num_producers=1, security_protocol='PLAINTEXT', client_version=str(TRUNK), broker_version=str(TRUNK))
+    @parametrize(acks=1, topic=TOPIC_REP_THREE, message_size=100000, num_producers=1, security_protocol='PLAINTEXT', client_version=str(LATEST_0_9), broker_version=str(LATEST_0_9))
+    @parametrize(acks=1, topic=TOPIC_REP_THREE, message_size=100000, num_producers=1, security_protocol='PLAINTEXT', client_version=str(TRUNK), broker_version=str(TRUNK))
+    @parametrize(acks=1, topic=TOPIC_REP_THREE, message_size=1000, num_producers=3, security_protocol='PLAINTEXT', client_version=str(LATEST_0_9), broker_version=str(LATEST_0_9))
+    @parametrize(acks=1, topic=TOPIC_REP_THREE, message_size=1000, num_producers=3, security_protocol='PLAINTEXT', client_version=str(TRUNK), broker_version=str(TRUNK))
     def test_producer_throughput(self, acks, topic, num_producers=1, message_size=DEFAULT_RECORD_SIZE, security_protocol='PLAINTEXT',
                                  client_version=str(TRUNK), broker_version=str(TRUNK)):
         """
@@ -96,8 +107,8 @@ class Benchmark(Test):
         self.producer.run()
         return compute_aggregate_throughput(self.producer)
 
-    @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
+    @parametrize(security_protocol='PLAINTEXT', client_version=str(LATEST_0_9), broker_version=str(LATEST_0_9))
+    @parametrize(security_protocol='PLAINTEXT', client_version=str(TRUNK), broker_version=str(TRUNK))
     def test_long_term_producer_throughput(self, security_protocol, interbroker_security_protocol=None,
                                            client_version=str(TRUNK), broker_version=str(TRUNK)):
         """
@@ -145,8 +156,8 @@ class Benchmark(Test):
         self.logger.info("\n".join(summary))
         return data
 
-    @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
-    @matrix(security_protocol=['PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL'])
+    @parametrize(security_protocol='PLAINTEXT', client_version=str(LATEST_0_9), broker_version=str(LATEST_0_9))
+    @parametrize(security_protocol='PLAINTEXT', client_version=str(TRUNK), broker_version=str(TRUNK))
     def test_end_to_end_latency(self, security_protocol, interbroker_security_protocol=None,
                                 client_version=str(TRUNK), broker_version=str(TRUNK)):
         """
@@ -172,9 +183,8 @@ class Benchmark(Test):
         self.perf.run()
         return latency(self.perf.results[0]['latency_50th_ms'],  self.perf.results[0]['latency_99th_ms'], self.perf.results[0]['latency_999th_ms'])
 
-    @parametrize(security_protocol='PLAINTEXT', new_consumer=False)
-    @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
+    @parametrize(security_protocol='PLAINTEXT', client_version=str(LATEST_0_9), broker_version=str(LATEST_0_9))
+    @parametrize(security_protocol='PLAINTEXT', client_version=str(TRUNK), broker_version=str(TRUNK))
     def test_producer_and_consumer(self, security_protocol, interbroker_security_protocol=None, new_consumer=True,
                                    client_version=str(TRUNK), broker_version=str(TRUNK)):
         """
@@ -214,9 +224,8 @@ class Benchmark(Test):
         self.logger.info("\n".join(summary))
         return data
 
-    @parametrize(security_protocol='PLAINTEXT', new_consumer=False)
-    @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
+    @parametrize(security_protocol='PLAINTEXT', client_version=str(LATEST_0_9), broker_version=str(LATEST_0_9))
+    @parametrize(security_protocol='PLAINTEXT', client_version=str(TRUNK), broker_version=str(TRUNK))
     def test_consumer_throughput(self, security_protocol, interbroker_security_protocol=None, new_consumer=True, num_consumers=1,
                                  client_version=str(TRUNK), broker_version=str(TRUNK)):
         """
