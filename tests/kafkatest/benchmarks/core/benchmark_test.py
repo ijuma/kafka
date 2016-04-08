@@ -104,7 +104,7 @@ class Benchmark(Test):
                 'acks': acks,
                 'batch.size': self.batch_size,
                 'buffer.memory': self.buffer_memory,
-                'compression.type': 'snappy'})
+                'compression.type': 'gzip'})
         self.producer.run()
         return compute_aggregate_throughput(self.producer)
 
@@ -129,7 +129,7 @@ class Benchmark(Test):
         self.producer = ProducerPerformanceService(
             self.test_context, 1, self.kafka,
             topic=TOPIC_REP_THREE, num_records=self.msgs_large, record_size=DEFAULT_RECORD_SIZE,
-            throughput=-1, version=client_version, settings={'acks': 1, 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory, 'compression.type': 'snappy'},
+            throughput=-1, version=client_version, settings={'acks': 1, 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory, 'compression.type': 'gzip'},
             intermediate_stats=True
         )
         self.producer.run()
@@ -209,7 +209,7 @@ class Benchmark(Test):
             self.test_context, 1, self.kafka,
             topic=TOPIC_REP_THREE,
             num_records=num_records, record_size=DEFAULT_RECORD_SIZE, throughput=-1, version=client_version,
-            settings={'acks': 1, 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory, 'compression.type': 'snappy'}
+            settings={'acks': 1, 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory, 'compression.type': 'gzip'}
         )
         self.consumer = ConsumerPerformanceService(
             self.test_context, 1, self.kafka, topic=TOPIC_REP_THREE, new_consumer=new_consumer, messages=num_records)
@@ -246,7 +246,7 @@ class Benchmark(Test):
             self.test_context, 1, self.kafka,
             topic=TOPIC_REP_THREE,
             num_records=num_records, record_size=DEFAULT_RECORD_SIZE, throughput=-1, version=client_version,
-            settings={'acks': 1, 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory, 'compression.type': 'snappy'}
+            settings={'acks': 1, 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory, 'compression.type': 'gzip'}
         )
         self.producer.run()
 
