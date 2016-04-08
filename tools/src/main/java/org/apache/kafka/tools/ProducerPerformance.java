@@ -17,6 +17,7 @@ import static net.sourceforge.argparse4j.impl.Arguments.store;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+import java.util.Random;
 
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -59,7 +60,7 @@ public class ProducerPerformance {
 
             /* setup perf test */
             byte[] payload = new byte[recordSize];
-            Arrays.fill(payload, (byte) 1);
+            new Random(0).nextBytes(payload);
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<byte[], byte[]>(topicName, payload);
             Stats stats = new Stats(numRecords, 5000);
             long startMs = System.currentTimeMillis();
