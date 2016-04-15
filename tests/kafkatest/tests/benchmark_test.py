@@ -85,6 +85,7 @@ class Benchmark(Test):
             num_records=nrecords, record_size=message_size,  throughput=-1,
             settings={
                 'acks': acks,
+                'compression.type': "snappy",
                 'batch.size': self.batch_size,
                 'buffer.memory': self.buffer_memory})
         self.producer.run()
@@ -181,7 +182,7 @@ class Benchmark(Test):
             self.test_context, 1, self.kafka,
             topic=TOPIC_REP_THREE,
             num_records=num_records, record_size=DEFAULT_RECORD_SIZE, throughput=-1,
-            settings={'acks': 1, 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory}
+            settings={'acks': 1, 'compression_type': 'snappy', 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory}
         )
         self.consumer = ConsumerPerformanceService(
             self.test_context, 1, self.kafka, topic=TOPIC_REP_THREE, new_consumer=new_consumer, messages=num_records)
@@ -215,7 +216,7 @@ class Benchmark(Test):
             self.test_context, 1, self.kafka,
             topic=TOPIC_REP_THREE,
             num_records=num_records, record_size=DEFAULT_RECORD_SIZE, throughput=-1,
-            settings={'acks': 1, 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory}
+            settings={'acks': 1, 'compression_type': 'snappy', 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory}
         )
         self.producer.run()
 
