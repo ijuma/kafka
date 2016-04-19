@@ -64,14 +64,9 @@ class Benchmark(Test):
         self.kafka.log_level = "INFO"  # We don't DEBUG logging here
         self.kafka.start()
 
-    @parametrize(acks=1, topic=TOPIC_REP_ONE)
-    @parametrize(acks=1, topic=TOPIC_REP_THREE)
-    @parametrize(acks=-1, topic=TOPIC_REP_THREE)
-    @parametrize(acks=1, topic=TOPIC_REP_THREE, num_producers=3)
-    @matrix(acks=[1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000], compression_type=["none", "snappy"], security_protocol=['PLAINTEXT', 'SSL'])
+    @matrix(acks=[1], topic=[TOPIC_REP_THREE], message_size=[100, 1000], num_producers=[1, 3], compression_type=["none", "snappy", "gzip"], security_protocol=['PLAINTEXT'], version=['0.9.0.1', 'trunk'], linger_ms=['0', '10', '100'])
     def test_producer_throughput(self, acks, topic, num_producers=1, message_size=DEFAULT_RECORD_SIZE,
-                                 compression_type="none", security_protocol='PLAINTEXT', client_version=str(TRUNK),
-                                 broker_version=str(TRUNK)):
+                                 compression_type="none", security_protocol='PLAINTEXT', version=str(TRUNK), linger_ms=0):
         """
         Setup: 1 node zk + 3 node kafka cluster
         Produce ~128MB worth of messages to a topic with 6 partitions. Required acks, topic replication factor,
@@ -80,8 +75,8 @@ class Benchmark(Test):
         Collect and return aggregate throughput statistics after all messages have been acknowledged.
         (This runs ProducerPerformance.java under the hood)
         """
-        client_version = KafkaVersion(client_version)
-        broker_version = KafkaVersion(broker_version)
+        client_version = KafkaVersion(version)
+        broker_version = KafkaVersion(version)
         self.validate_versions(client_version, broker_version)
         self.start_kafka(security_protocol, security_protocol, broker_version)
         # Always generate the same total amount of data
@@ -94,6 +89,7 @@ class Benchmark(Test):
                 'acks': acks,
                 'compression.type': compression_type,
                 'batch.size': self.batch_size,
+                'linger.ms': linger_ms,
                 'buffer.memory': self.buffer_memory})
         self.producer.run()
         return compute_aggregate_throughput(self.producer)
