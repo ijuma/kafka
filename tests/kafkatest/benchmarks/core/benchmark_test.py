@@ -21,7 +21,7 @@ from ducktape.tests.test import Test
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.performance import ProducerPerformanceService, EndToEndLatencyService, ConsumerPerformanceService, throughput, latency, compute_aggregate_throughput
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.version import TRUNK, KafkaVersion
+from kafkatest.version import TRUNK, KafkaVersion, V_0_9_0_1
 
 TOPIC_REP_ONE = "topic-replication-factor-one"
 TOPIC_REP_THREE = "topic-replication-factor-three"
@@ -63,7 +63,8 @@ class Benchmark(Test):
         self.kafka.log_level = "INFO"  # We don't DEBUG logging here
         self.kafka.start()
 
-    @matrix(acks=[-1, 1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000], compression_type=["none"], security_protocol=['SSL'])
+    @matrix(acks=[-1, 1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000], compression_type=["none"], security_protocol=['SSL'], client_version=str(V_0_9_0_1), broker_version=str(V_0_9_0_1))
+    @matrix(acks=[-1, 1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000], compression_type=["none"], security_protocol=['SSL'], client_version=str(TRUNK), broker_version=str(TRUNK))
     def test_producer_throughput(self, acks, topic, num_producers=1, message_size=DEFAULT_RECORD_SIZE,
                                  compression_type="none", security_protocol='PLAINTEXT', client_version=str(TRUNK),
                                  broker_version=str(TRUNK)):
