@@ -63,8 +63,8 @@ class Benchmark(Test):
         self.kafka.log_level = "INFO"  # We don't DEBUG logging here
         self.kafka.start()
 
-    @matrix(acks=[-1, 1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000], compression_type=["none"], security_protocol=['SSL'], client_version=str(V_0_9_0_1), broker_version=str(V_0_9_0_1))
-    @matrix(acks=[-1, 1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000], compression_type=["none"], security_protocol=['SSL'], client_version=str(TRUNK), broker_version=str(TRUNK))
+    @matrix(acks=[-1, 1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000], compression_type=["none"], security_protocol=['SSL'], client_version="0.9.0.1", broker_version="0.9.0.1")
+    @matrix(acks=[-1, 1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000], compression_type=["none"], security_protocol=['SSL'], client_version="trunk", broker_version="trunk")
     def test_producer_throughput(self, acks, topic, num_producers=1, message_size=DEFAULT_RECORD_SIZE,
                                  compression_type="none", security_protocol='PLAINTEXT', client_version=str(TRUNK),
                                  broker_version=str(TRUNK)):
