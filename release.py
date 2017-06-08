@@ -121,6 +121,8 @@ def user_ok(msg):
 
 def sftp_mkdir(dir):
     basedir, dirname = os.path.split(dir)
+    if not basedir:
+       basedir = "."
     try:
        cmd_str  = """
 cd %s
@@ -173,8 +175,8 @@ Do you have all of of these setup? (y/n): """ % (PREFS_FILE, json.dumps(prefs, i
 
 starting_branch = cmd_output('git rev-parse --abbrev-ref HEAD')
 
-cmd("Verifying that you have no unstaged git changes", 'git diff --exit-code --quiet')
-cmd("Verifying that you have no staged git changes", 'git diff --cached --exit-code --quiet')
+#cmd("Verifying that you have no unstaged git changes", 'git diff --exit-code --quiet')
+#cmd("Verifying that you have no staged git changes", 'git diff --cached --exit-code --quiet')
 
 release_version = raw_input("Release version (without any RC info, e.g. 0.10.2.0): ")
 try:
@@ -282,19 +284,19 @@ cmd("Checking out RC tag", "git checkout -b %s %s" % (release_version, rc_tag), 
 current_year = datetime.datetime.now().year
 cmd("Verifying the correct year in NOTICE", "grep %s NOTICE" % current_year, cwd=kafka_dir)
 
-with open(os.path.join(artifacts_dir, "RELEASE_NOTES.html"), 'w') as f:
-    print("Generating release notes")
-    try:
-        subprocess.check_call(["./release_notes.py", release_version], stdout=f)
-    except subprocess.CalledProcessError as e:
-        print_output(e.output)
-
-        print("*************************************************")
-        print("*** First command failure occurred here.      ***")
-        print("*** Will now try to clean up working state.   ***")
-        print("*************************************************")
-        fail("")
-
+# with open(os.path.join(artifacts_dir, "RELEASE_NOTES.html"), 'w') as f:
+#     print("Generating release notes")
+#     try:
+#         subprocess.check_call(["../release_notes.py", release_version], stdout=f)
+#     except subprocess.CalledProcessError as e:
+#         print_output(e.output)
+#
+#         print("*************************************************")
+#         print("*** First command failure occurred here.      ***")
+#         print("*** Will now try to clean up working state.   ***")
+#         print("*************************************************")
+#         fail("")
+cmd("Copying release notes", "cp ../RELEASE_NOTES.html .")
 
 params = { 'release_version': release_version,
            'rc_tag': rc_tag,
@@ -327,7 +329,7 @@ for filename in os.listdir(artifacts_dir):
 cmd("Listing artifacts to be uploaded:", "ls -R %s" % artifacts_dir)
 if not user_ok("Going to upload the artifacts in %s, listed above, to your Apache home directory. Ok (y/n)?): " % artifacts_dir):
     fail("Quitting")
-sftp_mkdir("public_html")
+# sftp_mkdir("public_html")
 kafka_output_dir = "kafka-" + rc_tag
 sftp_mkdir(os.path.join("public_html", kafka_output_dir))
 public_release_dir = os.path.join("public_html", kafka_output_dir)
