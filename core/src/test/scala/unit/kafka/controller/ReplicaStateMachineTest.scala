@@ -56,7 +56,7 @@ class ReplicaStateMachineTest extends JUnitSuite {
     mockControllerBrokerRequestBatch = EasyMock.createMock(classOf[ControllerBrokerRequestBatch])
     mockTopicDeletionManager = EasyMock.createMock(classOf[TopicDeletionManager])
     replicaState = mutable.Map.empty[PartitionAndReplica, ReplicaState]
-    replicaStateMachine = new ReplicaStateMachine(config, new StateChangeLogger(brokerId, true, None), controllerContext, mockTopicDeletionManager, mockZkClient,
+    replicaStateMachine = new ReplicaStateMachine(config, controllerContext, mockTopicDeletionManager, mockZkClient,
       replicaState, mockControllerBrokerRequestBatch)
   }
 

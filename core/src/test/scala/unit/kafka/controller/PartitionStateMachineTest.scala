@@ -55,8 +55,8 @@ class PartitionStateMachineTest extends JUnitSuite {
     mockControllerBrokerRequestBatch = EasyMock.createMock(classOf[ControllerBrokerRequestBatch])
     mockTopicDeletionManager = EasyMock.createMock(classOf[TopicDeletionManager])
     partitionState = mutable.Map.empty[TopicPartition, PartitionState]
-    partitionStateMachine = new PartitionStateMachine(config, new StateChangeLogger(brokerId, true, None), controllerContext, mockTopicDeletionManager,
-      mockZkClient, partitionState, mockControllerBrokerRequestBatch)
+    partitionStateMachine = new PartitionStateMachine(config, controllerContext, mockTopicDeletionManager, mockZkClient,
+      partitionState, mockControllerBrokerRequestBatch)
   }
 
   @Test

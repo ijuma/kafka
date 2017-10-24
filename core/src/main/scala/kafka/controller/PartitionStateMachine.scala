@@ -42,7 +42,6 @@ import scala.collection.mutable
  *                          moves to the OfflinePartition state. Valid previous states are NewPartition/OnlinePartition
  */
 class PartitionStateMachine(config: KafkaConfig,
-                            stateChangeLogger: StateChangeLogger,
                             controllerContext: ControllerContext,
                             topicDeletionManager: TopicDeletionManager,
                             zkClient: KafkaZkClient,

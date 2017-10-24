@@ -48,11 +48,12 @@ object ControllerChannelManager {
 }
 
 class ControllerChannelManager(controllerContext: ControllerContext, config: KafkaConfig, time: Time, metrics: Metrics,
-                               stateChangeLogger: StateChangeLogger, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
+                               threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
   import ControllerChannelManager._
   protected val brokerStateInfo = new HashMap[Int, ControllerBrokerStateInfo]
   private val brokerLock = new Object
-  this.logIdent = "[Channel manager on controller " + config.brokerId + "]: "
+
+  logIdent = s"[Controller id=$controllerId] "
 
   newGauge(
     "TotalQueueSize",
@@ -108,9 +109,9 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
 
   private def addNewBroker(broker: Broker) {
     val messageQueue = new LinkedBlockingQueue[QueueItem]
-    debug(s"Controller ${config.brokerId} trying to connect to broker ${broker.id}")
+    debug(s"Trying to connect to broker ${broker.id}")
     val brokerNode = broker.getNode(config.interBrokerListenerName)
-    val logContext = new LogContext(s"[Controller id=${config.brokerId}, targetBrokerId=${brokerNode.idString}] ")
+    val logContext = new LogContext(s"[Controller id=$controllerId, targetBrokerId=${brokerNode.idString}] ")
     val networkClient = {
       val channelBuilder = ChannelBuilders.clientChannelBuilder(
         config.interBrokerSecurityProtocol,
@@ -134,7 +135,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
       new NetworkClient(
         selector,
         new ManualMetadataUpdater(Seq(brokerNode).asJava),
-        config.brokerId.toString,
+        controllerId.toString,
         1,
         0,
         0,
@@ -148,12 +149,12 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
       )
     }
     val threadName = threadNamePrefix match {
-      case None => s"Controller-${config.brokerId}-to-broker-${broker.id}-send-thread"
-      case Some(name) => s"$name:Controller-${config.brokerId}-to-broker-${broker.id}-send-thread"
+      case None => s"Controller-$controllerId-to-broker-${broker.id}-send-thread"
+      case Some(name) => s"$name:Controller-$controllerId-to-broker-${broker.id}-send-thread"
     }
 
-    val requestThread = new RequestSendThread(config.brokerId, controllerContext, messageQueue, networkClient,
-      brokerNode, config, time, stateChangeLogger, threadName)
+    val requestThread = new RequestSendThread(controllerId, controllerContext, messageQueue, networkClient,
+      brokerNode, config, time, threadName)
     requestThread.setDaemon(false)
 
     val queueSizeGauge = newGauge(
@@ -167,6 +168,8 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
     brokerStateInfo.put(broker.id, new ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue,
       requestThread, queueSizeGauge))
   }
+
+  private def controllerId: Int = config.brokerId
 
   private def queueSizeTags(brokerId: Int) = Map("broker-id" -> brokerId.toString)
 
@@ -203,11 +206,10 @@ class RequestSendThread(val controllerId: Int,
                         val brokerNode: Node,
                         val config: KafkaConfig,
                         val time: Time,
-                        val stateChangeLogger: StateChangeLogger,
                         name: String)
   extends ShutdownableThread(name = name) {
 
-  logIdent = s"[RequestSendThread controllerId=$controllerId] "
+  logIdent = s"[Controller id=${config.brokerId}] "
 
   private val socketTimeoutMs = config.controllerSocketTimeoutMs
 
@@ -235,8 +237,8 @@ class RequestSendThread(val controllerId: Int,
           }
         } catch {
           case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
-            warn(s"Controller $controllerId epoch ${controllerContext.epoch} fails to send request $requestBuilder " +
-              s"to broker $brokerNode. Reconnecting to broker.", e)
+            warn(s"Controller $controllerId epoch ${controllerContext.epoch} failed to send request $requestBuilder to " +
+              s"broker $brokerNode. Reconnecting.", e)
             networkClient.close(brokerNode.idString)
             isSendSuccessful = false
             backoff()
@@ -250,7 +252,8 @@ class RequestSendThread(val controllerId: Int,
 
         val response = clientResponse.responseBody
 
-        stateChangeLogger.withControllerEpoch(controllerContext.epoch).trace(s"Received response " +
+        //FIXME stateChangeLogger.withControllerEpoch(controllerContext.epoch)
+        trace(s"Received response " +
           s"${response.toString(requestHeader.apiVersion)} for request $api with correlation id " +
           s"${requestHeader.correlationId} sent to broker $brokerNode")
 
@@ -260,7 +263,7 @@ class RequestSendThread(val controllerId: Int,
       }
     } catch {
       case e: Throwable =>
-        error(s"Controller $controllerId fails to send a request to broker $brokerNode", e)
+        error(s"Controller $controllerId failed to send a request to broker $brokerNode", e)
         // If there is any socket error (eg, socket timeout), the connection is no longer usable and needs to be recreated.
         networkClient.close(brokerNode.idString)
     }
@@ -286,7 +289,7 @@ class RequestSendThread(val controllerId: Int,
 
 }
 
-class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogger: StateChangeLogger) extends  Logging {
+class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging {
   val controllerContext = controller.controllerContext
   val controllerId: Int = controller.config.brokerId
   val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, LeaderAndIsrRequest.PartitionState]]

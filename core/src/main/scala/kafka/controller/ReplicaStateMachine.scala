@@ -46,7 +46,6 @@ import scala.collection.mutable
  *                        ReplicaDeletionSuccessful
  */
 class ReplicaStateMachine(config: KafkaConfig,
-                          stateChangeLogger: StateChangeLogger,
                           controllerContext: ControllerContext,
                           topicDeletionManager: TopicDeletionManager,
                           zkClient: KafkaZkClient,

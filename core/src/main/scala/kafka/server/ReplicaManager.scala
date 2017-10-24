@@ -186,7 +186,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   private var hwThreadInitialized = false
   this.logIdent = s"[ReplicaManager broker=$localBrokerId] "
-  private val stateChangeLogger = new StateChangeLogger(localBrokerId, inControllerContext = false, None)
+  private val stateChangeLogger = new StateChangeLogger(localBrokerId)
 
   private val isrChangeSet: mutable.Set[TopicPartition] = new mutable.HashSet[TopicPartition]()
   private val lastIsrChangeMs = new AtomicLong(System.currentTimeMillis())
