@@ -288,9 +288,9 @@ object TestUtils extends Logging {
     // create topic
     adminZkClient.createTopic(topic, numPartitions, replicationFactor, topicConfig)
     // wait until the update metadata request for new topic reaches all servers
-    (0 until numPartitions).map { i =>
-      TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
-      i -> TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, i)
+    (0 until numPartitions).map { partition =>
+      val leader = TestUtils.waitUntilMetadataIsPropagated(servers, topic, partition)
+      partition -> leader
     }.toMap
   }
 
@@ -305,9 +305,9 @@ object TestUtils extends Logging {
     // create topic
     adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, partitionReplicaAssignment)
     // wait until the update metadata request for new topic reaches all servers
-    partitionReplicaAssignment.keySet.map { case i =>
-      TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
-      i -> TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, i)
+    partitionReplicaAssignment.keySet.map { partition =>
+      val leader = TestUtils.waitUntilMetadataIsPropagated(servers, topic, partition)
+      partition -> leader
     }.toMap
   }
 
@@ -913,8 +913,7 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Wait until a valid leader is propagated to the metadata cache in each broker.
-   * It assumes that the leader propagated to each broker is the same.
+   * Wait until the same valid leader is propagated to the metadata cache in each broker.
    *
    * @param servers The list of servers that the metadata should reach to
    * @param topic The topic name
@@ -924,22 +923,19 @@ object TestUtils extends Logging {
    */
   def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int,
                                     timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
-    var leader: Int = -1
-    TestUtils.waitUntilTrue(() =>
-      servers.foldLeft(true) {
-        (result, server) =>
-          val partitionStateOpt = server.apis.metadataCache.getPartitionInfo(topic, partition)
-          partitionStateOpt match {
-            case None => false
-            case Some(partitionState) =>
-              leader = partitionState.basePartitionState.leader
-              result && Request.isValidBrokerId(leader)
-          }
-      },
-      "Partition [%s,%d] metadata not propagated after %d ms".format(topic, partition, timeout),
-      waitTime = timeout)
 
-    leader
+    def fetchBrokerToPartitionLeader: Map[Int, Int] = servers.flatMap { server =>
+      server.apis.metadataCache.getPartitionInfo(topic, partition).map { partitionInfo =>
+        server.config.brokerId -> partitionInfo.basePartitionState.leader
+      }
+    }.toMap
+
+    val (brokerToLeader, success) = computeUntilTrue(fetchBrokerToPartitionLeader, waitTime = timeout)(brokerToLeader =>
+      brokerToLeader.values.headOption.map(Request.isValidBrokerId).getOrElse(false) && brokerToLeader.values.toSet.size == 1)
+    val topicPartition = new TopicPartition(topic, partition)
+    assertTrue(s"Partition $topicPartition metadata not propagated after $timeout ms, broker to partition leader map: " +
+      s"$brokerToLeader", success)
+    brokerToLeader.values.head
   }
 
   def waitUntilControllerElected(zkClient: KafkaZkClient, timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
