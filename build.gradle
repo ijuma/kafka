@@ -206,6 +206,7 @@ subprojects {
 
     minHeapSize = "256m"
     maxHeapSize = "2048m"
+    systemProperty 'net.sf.cglib.experimental_asm7', 'true'
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
@@ -220,6 +221,7 @@ subprojects {
 
     minHeapSize = "256m"
     maxHeapSize = "2048m"
+    systemProperty 'net.sf.cglib.experimental_asm7', 'true'
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
@@ -238,6 +240,7 @@ subprojects {
 
     minHeapSize = "256m"
     maxHeapSize = "2048m"
+    systemProperty 'net.sf.cglib.experimental_asm7', 'true'
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
