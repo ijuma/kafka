@@ -91,9 +91,14 @@ class KafkaApis(val requestChannel: RequestChannel,
                 time: Time,
                 val tokenManager: DelegationTokenManager) extends Logging {
 
-  type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
-  this.logIdent = "[KafkaApi-%d] ".format(brokerId)
-  val adminZkClient = new AdminZkClient(zkClient)
+  this.logIdent = s"[KafkaApis brokerId=$brokerId] "
+
+  private val adminZkClient = new AdminZkClient(zkClient)
+  private val kafkaApi = new KafkaApi(requestChannel, quotas, controller, brokerTopicStats,
+    authorizer, brokerId)
+  import kafkaApi._
+  private val fetchApi = new FetchApi(kafkaApi, fetchManager, metadataCache, quotas, replicaManager,
+    brokerTopicStats, time, brokerId)
 
   def close() {
     info("Shutdown complete.")
@@ -108,7 +113,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
       request.header.apiKey match {
         case ApiKeys.PRODUCE => handleProduceRequest(request)
-        case ApiKeys.FETCH => handleFetchRequest(request)
+        case ApiKeys.FETCH => fetchApi.handleRequest(request)
         case ApiKeys.LIST_OFFSETS => handleListOffsetRequest(request)
         case ApiKeys.METADATA => handleTopicMetadataRequest(request)
         case ApiKeys.LEADER_AND_ISR => handleLeaderAndIsrRequest(request)
@@ -388,9 +393,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  private def authorize(session: RequestChannel.Session, operation: Operation, resource: Resource): Boolean =
-    authorizer.forall(_.authorize(session, operation, resource))
-
   /**
    * Handle a produce request
    */
@@ -490,7 +492,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    def processingStatsCallback(processingStats: FetchResponseStats): Unit = {
+    def processingStatsCallback(processingStats: Map[TopicPartition, RecordConversionStats]): Unit = {
       processingStats.foreach { case (tp, info) =>
         updateRecordConversionStats(request, tp, info)
       }
@@ -516,254 +518,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       produceRequest.clearPartitionRecords()
     }
   }
-
-  /**
-   * Handle a fetch request
-   */
-  def handleFetchRequest(request: RequestChannel.Request) {
-    val versionId = request.header.apiVersion
-    val clientId = request.header.clientId
-    val fetchRequest = request.body[FetchRequest]
-    val fetchContext = fetchManager.newContext(
-      fetchRequest.metadata,
-      fetchRequest.fetchData,
-      fetchRequest.toForget,
-      fetchRequest.isFromFollower)
-
-    def errorResponse[T >: MemoryRecords <: BaseRecords](error: Errors): FetchResponse.PartitionData[T] = {
-      new FetchResponse.PartitionData[T](error, FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-        FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
-    }
-
-    val erroneous = mutable.ArrayBuffer[(TopicPartition, FetchResponse.PartitionData[Records])]()
-    val interesting = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
-    if (fetchRequest.isFromFollower) {
-      // The follower must have ClusterAction on ClusterResource in order to fetch partition data.
-      if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
-        fetchContext.foreachPartition { (topicPartition, data) =>
-          if (!metadataCache.contains(topicPartition))
-            erroneous += topicPartition -> errorResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)
-          else
-            interesting += (topicPartition -> data)
-        }
-      } else {
-        fetchContext.foreachPartition { (part, _) =>
-          erroneous += part -> errorResponse(Errors.TOPIC_AUTHORIZATION_FAILED)
-        }
-      }
-    } else {
-      // Regular Kafka consumers need READ permission on each partition they are fetching.
-      fetchContext.foreachPartition { (topicPartition, data) =>
-        if (!authorize(request.session, Read, Resource(Topic, topicPartition.topic, LITERAL)))
-          erroneous += topicPartition -> errorResponse(Errors.TOPIC_AUTHORIZATION_FAILED)
-        else if (!metadataCache.contains(topicPartition))
-          erroneous += topicPartition -> errorResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)
-        else
-          interesting += (topicPartition -> data)
-      }
-    }
-
-    def maybeConvertFetchedData(tp: TopicPartition,
-                                partitionData: FetchResponse.PartitionData[Records]): FetchResponse.PartitionData[BaseRecords] = {
-      val logConfig = replicaManager.getLogConfig(tp)
-
-      if (logConfig.forall(_.compressionType == ZStdCompressionCodec.name) && versionId < 10) {
-        trace(s"Fetching messages is disabled for ZStandard compressed partition $tp. Sending unsupported version response to $clientId.")
-        errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
-      } else {
-        // Down-conversion of the fetched records is needed when the stored magic version is
-        // greater than that supported by the client (as indicated by the fetch request version). If the
-        // configured magic version for the topic is less than or equal to that supported by the version of the
-        // fetch request, we skip the iteration through the records in order to check the magic version since we
-        // know it must be supported. However, if the magic version is changed from a higher version back to a
-        // lower version, this check will no longer be valid and we will fail to down-convert the messages
-        // which were written in the new format prior to the version downgrade.
-        val unconvertedRecords = partitionData.records
-        val downConvertMagic =
-          logConfig.map(_.messageFormatVersion.recordVersion.value).flatMap { magic =>
-            if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0))
-              Some(RecordBatch.MAGIC_VALUE_V0)
-            else if (magic > RecordBatch.MAGIC_VALUE_V1 && versionId <= 3 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1))
-              Some(RecordBatch.MAGIC_VALUE_V1)
-            else
-              None
-          }
-
-        downConvertMagic match {
-          case Some(magic) =>
-            // For fetch requests from clients, check if down-conversion is disabled for the particular partition
-            if (!fetchRequest.isFromFollower && !logConfig.forall(_.messageDownConversionEnable)) {
-              trace(s"Conversion to message format ${downConvertMagic.get} is disabled for partition $tp. Sending unsupported version response to $clientId.")
-              errorResponse(Errors.UNSUPPORTED_VERSION)
-            } else {
-              try {
-                trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
-                // Because down-conversion is extremely memory intensive, we want to try and delay the down-conversion as much
-                // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. The lazy, chunked
-                // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
-                // client.
-                new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
-                  partitionData.lastStableOffset, partitionData.logStartOffset, partitionData.abortedTransactions,
-                  new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time))
-              } catch {
-                case e: UnsupportedCompressionTypeException =>
-                  trace("Received unsupported compression type error during down-conversion", e)
-                  errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
-              }
-            }
-          case None => new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
-            partitionData.lastStableOffset, partitionData.logStartOffset, partitionData.abortedTransactions,
-            unconvertedRecords)
-        }
-      }
-    }
-
-    // the callback for process a fetch response, invoked before throttling
-    def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
-      val partitions = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
-      responsePartitionData.foreach { case (tp, data) =>
-        val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
-        val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-        partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
-          data.logStartOffset, abortedTransactions, data.records))
-      }
-      erroneous.foreach { case (tp, data) => partitions.put(tp, data) }
-
-      // When this callback is triggered, the remote API call has completed.
-      // Record time before any byte-rate throttling.
-      request.apiRemoteCompleteTimeNanos = time.nanoseconds
-
-      var unconvertedFetchResponse: FetchResponse[Records] = null
-
-      def createResponse(throttleTimeMs: Int): FetchResponse[BaseRecords] = {
-        // Down-convert messages for each partition if required
-        val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[BaseRecords]]
-        unconvertedFetchResponse.responseData().asScala.foreach { case (tp, unconvertedPartitionData) =>
-          if (unconvertedPartitionData.error != Errors.NONE)
-            debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
-              s"on partition $tp failed due to ${unconvertedPartitionData.error.exceptionName}")
-          convertedData.put(tp, maybeConvertFetchedData(tp, unconvertedPartitionData))
-        }
-
-        // Prepare fetch response from converted data
-        val response = new FetchResponse(unconvertedFetchResponse.error(), convertedData, throttleTimeMs,
-          unconvertedFetchResponse.sessionId())
-        response.responseData.asScala.foreach { case (topicPartition, data) =>
-          // record the bytes out metrics only when the response is being sent
-          brokerTopicStats.updateBytesOut(topicPartition.topic, fetchRequest.isFromFollower, data.records.sizeInBytes)
-        }
-        response
-      }
-
-      def updateConversionStats(send: Send): Unit = {
-        send match {
-          case send: MultiRecordsSend if send.recordConversionStats != null =>
-            send.recordConversionStats.asScala.toMap.foreach {
-              case (tp, stats) => updateRecordConversionStats(request, tp, stats)
-            }
-          case _ =>
-        }
-      }
-
-      if (fetchRequest.isFromFollower) {
-        // We've already evaluated against the quota and are good to go. Just need to record it now.
-        unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
-        val responseSize = sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader)
-        quotas.leader.record(responseSize)
-        trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.responseData().size()}, " +
-          s"metadata=${unconvertedFetchResponse.sessionId()}")
-        sendResponseExemptThrottle(request, createResponse(0), Some(updateConversionStats))
-      } else {
-        // Fetch size used to determine throttle time is calculated before any down conversions.
-        // This may be slightly different from the actual response size. But since down conversions
-        // result in data being loaded into memory, we should do this only when we are not going to throttle.
-        //
-        // Record both bandwidth and request quota-specific values and throttle by muting the channel if any of the
-        // quotas have been violated. If both quotas have been violated, use the max throttle time between the two
-        // quotas. When throttled, we unrecord the recorded bandwidth quota value
-        val responseSize = fetchContext.getResponseSize(partitions, versionId)
-        val timeMs = time.milliseconds()
-        val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request)
-        val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request, responseSize, timeMs)
-
-        val maxThrottleTimeMs = math.max(bandwidthThrottleTimeMs, requestThrottleTimeMs)
-        if (maxThrottleTimeMs > 0) {
-          // Even if we need to throttle for request quota violation, we should "unrecord" the already recorded value
-          // from the fetch quota because we are going to return an empty response.
-          quotas.fetch.unrecordQuotaSensor(request, responseSize, timeMs)
-          if (bandwidthThrottleTimeMs > requestThrottleTimeMs) {
-            quotas.fetch.throttle(request, bandwidthThrottleTimeMs, sendResponse)
-          } else {
-            quotas.request.throttle(request, requestThrottleTimeMs, sendResponse)
-          }
-          // If throttling is required, return an empty response.
-          unconvertedFetchResponse = fetchContext.getThrottledResponse(maxThrottleTimeMs)
-        } else {
-          // Get the actual response. This will update the fetch context.
-          unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
-          trace(s"Sending Fetch response with partitions.size=$responseSize, metadata=${unconvertedFetchResponse.sessionId}")
-        }
-
-        // Send the response immediately.
-        sendResponse(request, Some(createResponse(maxThrottleTimeMs)), Some(updateConversionStats))
-      }
-    }
-
-    if (interesting.isEmpty)
-      processResponseCallback(Seq.empty)
-    else {
-      // call the replica manager to fetch messages from the local replica
-      replicaManager.fetchMessages(
-        fetchRequest.maxWait.toLong,
-        fetchRequest.replicaId,
-        fetchRequest.minBytes,
-        fetchRequest.maxBytes,
-        versionId <= 2,
-        interesting,
-        replicationQuota(fetchRequest),
-        processResponseCallback,
-        fetchRequest.isolationLevel)
-    }
-  }
-
-  class SelectingIterator(val partitions: util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]],
-                          val quota: ReplicationQuotaManager)
-                          extends util.Iterator[util.Map.Entry[TopicPartition, FetchResponse.PartitionData[Records]]] {
-    val iter = partitions.entrySet().iterator()
-
-    var nextElement: util.Map.Entry[TopicPartition, FetchResponse.PartitionData[Records]] = null
-
-    override def hasNext: Boolean = {
-      while ((nextElement == null) && iter.hasNext()) {
-        val element = iter.next()
-        if (quota.isThrottled(element.getKey)) {
-          nextElement = element
-        }
-      }
-      nextElement != null
-    }
-
-    override def next(): util.Map.Entry[TopicPartition, FetchResponse.PartitionData[Records]] = {
-      if (!hasNext()) throw new NoSuchElementException()
-      val element = nextElement
-      nextElement = null
-      element
-    }
-
-    override def remove() = throw new UnsupportedOperationException()
-  }
-
-  // Traffic from both in-sync and out of sync replicas are accounted for in replication quota to ensure total replication
-  // traffic doesn't exceed quota.
-  private def sizeOfThrottledPartitions(versionId: Short,
-                                        unconvertedResponse: FetchResponse[Records],
-                                        quota: ReplicationQuotaManager): Int = {
-    val iter = new SelectingIterator(unconvertedResponse.responseData(), quota)
-    FetchResponse.sizeOf(versionId, iter)
-  }
-
-  def replicationQuota(fetchRequest: FetchRequest): ReplicaQuota =
-    if (fetchRequest.isFromFollower) quotas.leader else UnboundedQuota
 
   def handleListOffsetRequest(request: RequestChannel.Request) {
     val version = request.header.apiVersion()
@@ -2268,7 +2022,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         new ElectPreferredLeadersResponse(data)})
     }
     if (!authorize(request.session, Alter, Resource.ClusterResource)) {
-      val error = new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null);
+      val error = new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null)
       val partitionErrors =
       if (electionRequest.data().topicPartitions() == null) {
         // Don't leak the set of partitions if the client lack authz
@@ -2279,142 +2033,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback(partitionErrors)
     } else {
       replicaManager.electPreferredLeaders(controller, partitions, sendResponseCallback, electionRequest.data().timeoutMs())
-    }
-  }
-
-  def authorizeClusterAction(request: RequestChannel.Request): Unit = {
-    if (!isAuthorizedClusterAction(request))
-      throw new ClusterAuthorizationException(s"Request $request is not authorized.")
-  }
-
-  private def isAuthorizedClusterAction(request: RequestChannel.Request): Boolean = {
-    authorize(request.session, ClusterAction, Resource.ClusterResource)
-  }
-
-  def authorizeClusterAlter(request: RequestChannel.Request): Unit = {
-    if (!authorize(request.session, Alter, Resource.ClusterResource))
-      throw new ClusterAuthorizationException(s"Request $request is not authorized.")
-  }
-
-  def authorizeClusterDescribe(request: RequestChannel.Request): Unit = {
-    if (!authorize(request.session, Describe, Resource.ClusterResource))
-      throw new ClusterAuthorizationException(s"Request $request is not authorized.")
-  }
-
-  private def updateRecordConversionStats(request: RequestChannel.Request,
-                                          tp: TopicPartition,
-                                          conversionStats: RecordConversionStats): Unit = {
-    val conversionCount = conversionStats.numRecordsConverted
-    if (conversionCount > 0) {
-      request.header.apiKey match {
-        case ApiKeys.PRODUCE =>
-          brokerTopicStats.topicStats(tp.topic).produceMessageConversionsRate.mark(conversionCount)
-          brokerTopicStats.allTopicsStats.produceMessageConversionsRate.mark(conversionCount)
-        case ApiKeys.FETCH =>
-          brokerTopicStats.topicStats(tp.topic).fetchMessageConversionsRate.mark(conversionCount)
-          brokerTopicStats.allTopicsStats.fetchMessageConversionsRate.mark(conversionCount)
-        case _ =>
-          throw new IllegalStateException("Message conversion info is recorded only for Produce/Fetch requests")
-      }
-      request.messageConversionsTimeNanos = conversionStats.conversionTimeNanos
-    }
-    request.temporaryMemoryBytes = conversionStats.temporaryMemoryBytes
-  }
-
-  private def handleError(request: RequestChannel.Request, e: Throwable) {
-    val mayThrottle = e.isInstanceOf[ClusterAuthorizationException] || !request.header.apiKey.clusterAction
-    error("Error when handling request: " +
-      s"clientId=${request.header.clientId}, " +
-      s"correlationId=${request.header.correlationId}, " +
-      s"api=${request.header.apiKey}, " +
-      s"body=${request.body[AbstractRequest]}", e)
-    if (mayThrottle)
-      sendErrorResponseMaybeThrottle(request, e)
-    else
-      sendErrorResponseExemptThrottle(request, e)
-  }
-
-  // Throttle the channel if the request quota is enabled but has been violated. Regardless of throttling, send the
-  // response immediately.
-  private def sendResponseMaybeThrottle(request: RequestChannel.Request,
-                                        createResponse: Int => AbstractResponse,
-                                        onComplete: Option[Send => Unit] = None): Unit = {
-    val throttleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request)
-    quotas.request.throttle(request, throttleTimeMs, sendResponse)
-    sendResponse(request, Some(createResponse(throttleTimeMs)), onComplete)
-  }
-
-  private def sendErrorResponseMaybeThrottle(request: RequestChannel.Request, error: Throwable) {
-    val throttleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request)
-    quotas.request.throttle(request, throttleTimeMs, sendResponse)
-    sendErrorOrCloseConnection(request, error, throttleTimeMs)
-  }
-
-  private def sendResponseExemptThrottle(request: RequestChannel.Request,
-                                         response: AbstractResponse,
-                                         onComplete: Option[Send => Unit] = None): Unit = {
-    quotas.request.maybeRecordExempt(request)
-    sendResponse(request, Some(response), onComplete)
-  }
-
-  private def sendErrorResponseExemptThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
-    quotas.request.maybeRecordExempt(request)
-    sendErrorOrCloseConnection(request, error, 0)
-  }
-
-  private def sendErrorOrCloseConnection(request: RequestChannel.Request, error: Throwable, throttleMs: Int): Unit = {
-    val requestBody = request.body[AbstractRequest]
-    val response = requestBody.getErrorResponse(throttleMs, error)
-    if (response == null)
-      closeConnection(request, requestBody.errorCounts(error))
-    else
-      sendResponse(request, Some(response), None)
-  }
-
-  private def sendNoOpResponseExemptThrottle(request: RequestChannel.Request): Unit = {
-    quotas.request.maybeRecordExempt(request)
-    sendResponse(request, None, None)
-  }
-
-  private def closeConnection(request: RequestChannel.Request, errorCounts: java.util.Map[Errors, Integer]): Unit = {
-    // This case is used when the request handler has encountered an error, but the client
-    // does not expect a response (e.g. when produce request has acks set to 0)
-    requestChannel.updateErrorMetrics(request.header.apiKey, errorCounts.asScala)
-    requestChannel.sendResponse(new RequestChannel.CloseConnectionResponse(request))
-  }
-
-  private def sendResponse(request: RequestChannel.Request,
-                           responseOpt: Option[AbstractResponse],
-                           onComplete: Option[Send => Unit]): Unit = {
-    // Update error metrics for each error code in the response including Errors.NONE
-    responseOpt.foreach(response => requestChannel.updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala))
-
-    val response = responseOpt match {
-      case Some(response) =>
-        val responseSend = request.context.buildResponse(response)
-        val responseString =
-          if (RequestChannel.isRequestLoggingEnabled) Some(response.toString(request.context.apiVersion))
-          else None
-        new RequestChannel.SendResponse(request, responseSend, responseString, onComplete)
-      case None =>
-        new RequestChannel.NoOpResponse(request)
-    }
-    sendResponse(response)
-  }
-
-  private def sendResponse(response: RequestChannel.Response): Unit = {
-    requestChannel.sendResponse(response)
-  }
-
-  private def isBrokerEpochStale(brokerEpochInRequest: Long): Boolean = {
-    // Broker epoch in LeaderAndIsr/UpdateMetadata/StopReplica request is unknown
-    // if the controller hasn't been upgraded to use KIP-380
-    if (brokerEpochInRequest == AbstractControlRequest.UNKNOWN_BROKER_EPOCH) false
-    else {
-      val curBrokerEpoch = controller.brokerEpoch
-      if (brokerEpochInRequest < curBrokerEpoch) true
-      else if (brokerEpochInRequest == curBrokerEpoch) false
-      else throw new IllegalStateException(s"Epoch $brokerEpochInRequest larger than current broker epoch $curBrokerEpoch")
     }
   }
 
