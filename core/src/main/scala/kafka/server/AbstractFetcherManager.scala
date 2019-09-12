@@ -18,10 +18,9 @@
 package kafka.server
 
 import kafka.utils.Logging
-import kafka.cluster.BrokerEndPoint
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable
@@ -128,7 +127,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   }
 
   // to be defined in subclass to create a specific fetcher
-  def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): T
+  def createFetcherThread(fetcherId: Int, sourceBroker: Node): T
 
   def addFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, InitialFetchState]): Unit = {
     lock synchronized {
@@ -236,8 +235,8 @@ class FailedPartitions {
   }
 }
 
-case class BrokerAndFetcherId(broker: BrokerEndPoint, fetcherId: Int)
+case class BrokerAndFetcherId(broker: Node, fetcherId: Int)
 
-case class InitialFetchState(leader: BrokerEndPoint, currentLeaderEpoch: Int, initOffset: Long)
+case class InitialFetchState(leader: Node, currentLeaderEpoch: Int, initOffset: Long)
 
 case class BrokerIdAndFetcherId(brokerId: Int, fetcherId: Int)

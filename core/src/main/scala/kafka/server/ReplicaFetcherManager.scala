@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
+import org.apache.kafka.common.Node
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 
@@ -32,7 +32,7 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig,
         clientId = "Replica",
         numFetchers = brokerConfig.numReplicaFetchers) {
 
-  override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
+  override def createFetcherThread(fetcherId: Int, sourceBroker: Node): ReplicaFetcherThread = {
     val prefix = threadNamePrefix.map(tp => s"$tp:").getOrElse("")
     val threadName = s"${prefix}ReplicaFetcherThread-$fetcherId-${sourceBroker.id}"
     new ReplicaFetcherThread(threadName, fetcherId, sourceBroker, brokerConfig, failedPartitions, replicaManager,

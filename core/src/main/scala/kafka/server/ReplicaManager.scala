@@ -621,7 +621,7 @@ class ReplicaManager(val config: KafkaConfig,
             val futureLog = futureLocalLogOrException(topicPartition)
             logManager.abortAndPauseCleaning(topicPartition)
 
-            val initialFetchState = InitialFetchState(BrokerEndPoint(config.brokerId, "localhost", -1),
+            val initialFetchState = InitialFetchState(new Node(config.brokerId, "localhost", -1),
               partition.getLeaderEpoch, futureLog.highWatermark)
             replicaAlterLogDirsManager.addFetcherForPartitions(Map(topicPartition -> initialFetchState))
           }
@@ -1264,7 +1264,7 @@ class ReplicaManager(val config: KafkaConfig,
           val topicPartition = partition.topicPartition
           if (logManager.getLog(topicPartition, isFuture = true).isDefined) {
             partition.log.foreach { log =>
-              val leader = BrokerEndPoint(config.brokerId, "localhost", -1)
+              val leader = new Node(config.brokerId, "localhost", -1)
 
               // Add future replica to partition's map
               partition.createLogIfNotExists(Request.FutureLocalReplicaId, isNew = false, isFutureReplica = true,
@@ -1470,7 +1470,7 @@ class ReplicaManager(val config: KafkaConfig,
         // we do not need to check if the leader exists again since this has been done at the beginning of this process
         val partitionsToMakeFollowerWithLeaderAndOffset = partitionsToMakeFollower.map { partition =>
           val leader = metadataCache.getAliveBrokers.find(_.id == partition.leaderReplicaIdOpt.get).get
-            .brokerEndPoint(config.interBrokerListenerName)
+            .node(config.interBrokerListenerName)
           val fetchOffset = partition.localLogOrException.highWatermark
           partition.topicPartition -> InitialFetchState(leader, partition.getLeaderEpoch, fetchOffset)
        }.toMap

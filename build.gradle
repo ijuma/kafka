@@ -1396,6 +1396,7 @@ project(':jmh-benchmarks') {
 
   dependencies {
     compile project(':clients')
+    compile project(':core')
     compile project(':streams')
     compile libs.jmhCore
     annotationProcessor libs.jmhGeneratorAnnProcess

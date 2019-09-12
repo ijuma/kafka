@@ -20,13 +20,13 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.message.MetadataResponseData;
-import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBrokerCollection;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition;
-import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopicCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -417,55 +417,60 @@ public class MetadataResponse extends AbstractResponse {
 
     }
 
-    public static MetadataResponse prepareResponse(int throttleTimeMs, Collection<Node> brokers, String clusterId,
-                                                   int controllerId, List<TopicMetadata> topicMetadataList,
+//    public static MetadataResponse prepareResponse(int throttleTimeMs, Collection<Node> brokers,
+//                                                   String clusterId, int controllerId,
+//                                                   List<TopicMetadata> topicMetadataList,
+//                                                   int clusterAuthorizedOperations) {
+//        return null;
+//    }
+
+    public static MetadataResponse prepareResponse(int throttleTimeMs,
+                                                   MetadataResponseBrokerCollection brokers,
+                                                   String clusterId, int controllerId,
+                                                   MetadataResponseTopicCollection topics,
                                                    int clusterAuthorizedOperations) {
         MetadataResponseData responseData = new MetadataResponseData();
         responseData.setThrottleTimeMs(throttleTimeMs);
-        brokers.forEach(broker ->
-            responseData.brokers().add(new MetadataResponseBroker()
-                .setNodeId(broker.id())
-                .setHost(broker.host())
-                .setPort(broker.port())
-                .setRack(broker.rack()))
-        );
-
+        responseData.setBrokers(brokers);
         responseData.setClusterId(clusterId);
         responseData.setControllerId(controllerId);
         responseData.setClusterAuthorizedOperations(clusterAuthorizedOperations);
-
-        topicMetadataList.forEach(topicMetadata -> {
-            MetadataResponseTopic metadataResponseTopic = new MetadataResponseTopic();
-            metadataResponseTopic
-                .setErrorCode(topicMetadata.error.code())
-                .setName(topicMetadata.topic)
-                .setIsInternal(topicMetadata.isInternal)
-                .setTopicAuthorizedOperations(topicMetadata.authorizedOperations);
-
-            for (PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata) {
-                metadataResponseTopic.partitions().add(new MetadataResponsePartition()
-                    .setErrorCode(partitionMetadata.error.code())
-                    .setPartitionIndex(partitionMetadata.partition)
-                    .setLeaderId(partitionMetadata.leader == null ? -1 : partitionMetadata.leader.id())
-                    .setLeaderEpoch(partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
-                    .setReplicaNodes(partitionMetadata.replicas.stream().map(Node::id).collect(Collectors.toList()))
-                    .setIsrNodes(partitionMetadata.isr.stream().map(Node::id).collect(Collectors.toList()))
-                    .setOfflineReplicas(partitionMetadata.offlineReplicas.stream().map(Node::id).collect(Collectors.toList())));
-            }
-            responseData.topics().add(metadataResponseTopic);
-        });
+        responseData.setTopics(topics);
+//        topicMetadataList.forEach(topicMetadata -> {
+//            MetadataResponseTopic metadataResponseTopic = new MetadataResponseTopic();
+//            metadataResponseTopic
+//                .setErrorCode(topicMetadata.error.code())
+//                .setName(topicMetadata.topic)
+//                .setIsInternal(topicMetadata.isInternal)
+//                .setTopicAuthorizedOperations(topicMetadata.authorizedOperations);
+//
+//            for (PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata) {
+//                metadataResponseTopic.partitions().add(new MetadataResponsePartition()
+//                    .setErrorCode(partitionMetadata.error.code())
+//                    .setPartitionIndex(partitionMetadata.partition)
+//                    .setLeaderId(partitionMetadata.leader == null ? -1 : partitionMetadata.leader.id())
+//                    .setLeaderEpoch(partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+//                    .setReplicaNodes(partitionMetadata.replicas.stream().map(Node::id).collect(Collectors.toList()))
+//                    .setIsrNodes(partitionMetadata.isr.stream().map(Node::id).collect(Collectors.toList()))
+//                    .setOfflineReplicas(partitionMetadata.offlineReplicas.stream().map(Node::id).collect(Collectors.toList())));
+//            }
+//            responseData.topics().add(metadataResponseTopic);
+//        });
         return new MetadataResponse(responseData);
     }
 
-    public static MetadataResponse prepareResponse(int throttleTimeMs, Collection<Node> brokers, String clusterId,
-                                                   int controllerId, List<TopicMetadata> topicMetadataList) {
-        return prepareResponse(throttleTimeMs, brokers, clusterId, controllerId, topicMetadataList,
+    public static MetadataResponse prepareResponse(int throttleTimeMs,
+                                                   MetadataResponseBrokerCollection brokers,
+                                                   String clusterId, int controllerId,
+                                                   MetadataResponseTopicCollection topics) {
+        return prepareResponse(throttleTimeMs, brokers, clusterId, controllerId, topics,
                 MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
     }
 
-    public static MetadataResponse prepareResponse(Collection<Node> brokers, String clusterId, int controllerId,
-                                                   List<TopicMetadata> topicMetadata) {
-        return prepareResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, brokers, clusterId, controllerId, topicMetadata);
+    public static MetadataResponse prepareResponse(MetadataResponseBrokerCollection brokers,
+                                                   String clusterId, int controllerId,
+                                                   MetadataResponseTopicCollection topics) {
+        return prepareResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, brokers, clusterId, controllerId, topics);
     }
 
     @Override

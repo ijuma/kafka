@@ -21,7 +21,6 @@ import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.locks.ReentrantLock
 
-import kafka.cluster.BrokerEndPoint
 import kafka.utils.{DelayedItem, Pool, ShutdownableThread}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.requests.EpochEndOffset._
@@ -39,7 +38,7 @@ import java.util.function.Consumer
 
 import com.yammer.metrics.core.Gauge
 import kafka.log.LogAppendInfo
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.internals.PartitionStates
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
 import org.apache.kafka.common.requests._
@@ -51,7 +50,7 @@ import scala.math._
  */
 abstract class AbstractFetcherThread(name: String,
                                      clientId: String,
-                                     val sourceBroker: BrokerEndPoint,
+                                     val sourceBroker: Node,
                                      failedPartitions: FailedPartitions,
                                      fetchBackOffMs: Int = 0,
                                      isInterruptible: Boolean = true)

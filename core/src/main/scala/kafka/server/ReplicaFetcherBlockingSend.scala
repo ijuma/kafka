@@ -18,7 +18,6 @@ package kafka.server
 
 import java.net.SocketTimeoutException
 
-import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.clients._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
@@ -40,15 +39,13 @@ trait BlockingSend {
   def close(): Unit
 }
 
-class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
+class ReplicaFetcherBlockingSend(sourceNode: Node,
                                  brokerConfig: KafkaConfig,
                                  metrics: Metrics,
                                  time: Time,
                                  fetcherId: Int,
                                  clientId: String,
                                  logContext: LogContext) extends BlockingSend {
-
-  private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
   private val socketTimeout: Int = brokerConfig.replicaSocketTimeoutMs
 
   private val (networkClient, reconfigurableChannelBuilder) = {
@@ -73,7 +70,7 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       metrics,
       time,
       "replica-fetcher",
-      Map("broker-id" -> sourceBroker.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
+      Map("broker-id" -> sourceNode.idString, "fetcher-id" -> fetcherId.toString).asJava,
       false,
       channelBuilder,
       logContext
@@ -102,14 +99,14 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       if (!NetworkClientUtils.awaitReady(networkClient, sourceNode, time, socketTimeout))
         throw new SocketTimeoutException(s"Failed to connect within $socketTimeout ms")
       else {
-        val clientRequest = networkClient.newClientRequest(sourceBroker.id.toString, requestBuilder,
+        val clientRequest = networkClient.newClientRequest(sourceNode.idString, requestBuilder,
           time.milliseconds(), true)
         NetworkClientUtils.sendAndReceive(networkClient, clientRequest, time)
       }
     }
     catch {
       case e: Throwable =>
-        networkClient.close(sourceBroker.id.toString)
+        networkClient.close(sourceNode.idString)
         throw e
     }
   }

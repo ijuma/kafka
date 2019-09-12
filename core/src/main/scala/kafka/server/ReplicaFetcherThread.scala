@@ -20,11 +20,10 @@ package kafka.server
 import java.util.Optional
 
 import kafka.api._
-import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import org.apache.kafka.clients.FetchSessionHandler
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
@@ -38,7 +37,7 @@ import scala.collection.{Map, mutable}
 
 class ReplicaFetcherThread(name: String,
                            fetcherId: Int,
-                           sourceBroker: BrokerEndPoint,
+                           sourceBroker: Node,
                            brokerConfig: KafkaConfig,
                            failedPartitions: FailedPartitions,
                            replicaMgr: ReplicaManager,

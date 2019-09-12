@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.ElectLeadersRequestOps
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
-import kafka.cluster.Partition
+import kafka.cluster.{Broker, Partition}
 import kafka.common.OffsetAndMetadata
 import kafka.controller.KafkaController
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult, LeaveGroupResult, SyncGroupResult}
@@ -48,31 +48,14 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
-import org.apache.kafka.common.message.CreateTopicsResponseData
+import org.apache.kafka.common.message.{AlterPartitionReassignmentsResponseData, CreateTopicsResponseData, DeleteGroupsResponseData, DeleteTopicsResponseData, DescribeGroupsResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListPartitionReassignmentsResponseData, MetadataResponseData, OffsetCommitRequestData, OffsetCommitResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, SyncGroupResponseData}
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
-import org.apache.kafka.common.message.DeleteGroupsResponseData
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
-import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData
-import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData
-import org.apache.kafka.common.message.DeleteTopicsResponseData
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
-import org.apache.kafka.common.message.DescribeGroupsResponseData
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult
-import org.apache.kafka.common.message.ExpireDelegationTokenResponseData
-import org.apache.kafka.common.message.FindCoordinatorResponseData
-import org.apache.kafka.common.message.HeartbeatResponseData
-import org.apache.kafka.common.message.InitProducerIdResponseData
-import org.apache.kafka.common.message.JoinGroupResponseData
-import org.apache.kafka.common.message.LeaveGroupResponseData
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
-import org.apache.kafka.common.message.ListGroupsResponseData
-import org.apache.kafka.common.message.OffsetCommitRequestData
-import org.apache.kafka.common.message.OffsetCommitResponseData
-import org.apache.kafka.common.message.RenewDelegationTokenResponseData
-import org.apache.kafka.common.message.SaslAuthenticateResponseData
-import org.apache.kafka.common.message.SaslHandshakeResponseData
-import org.apache.kafka.common.message.SyncGroupResponseData
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -140,7 +123,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.PRODUCE => handleProduceRequest(request)
         case ApiKeys.FETCH => handleFetchRequest(request)
         case ApiKeys.LIST_OFFSETS => handleListOffsetRequest(request)
-        case ApiKeys.METADATA => handleTopicMetadataRequest(request)
+        case ApiKeys.METADATA => handleMetadataRequest(request)
         case ApiKeys.LEADER_AND_ISR => handleLeaderAndIsrRequest(request)
         case ApiKeys.STOP_REPLICA => handleStopReplicaRequest(request)
         case ApiKeys.UPDATE_METADATA => handleUpdateMetadataRequest(request)
@@ -1038,7 +1021,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def getTopicMetadata(allowAutoTopicCreation: Boolean, topics: Set[String], listenerName: ListenerName,
                                errorUnavailableEndpoints: Boolean,
-                               errorUnavailableListeners: Boolean): Seq[MetadataResponse.TopicMetadata] = {
+                               errorUnavailableListeners: Boolean): MetadataResponseData.MetadataResponseTopicCollection = {
     val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
         errorUnavailableEndpoints, errorUnavailableListeners)
     if (topics.isEmpty || topicResponses.size == topics.size) {
@@ -1065,7 +1048,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   /**
    * Handle a topic metadata request
    */
-  def handleTopicMetadataRequest(request: RequestChannel.Request): Unit = {
+  def handleMetadataRequest(request: RequestChannel.Request): Unit = {
     val metadataRequest = request.body[MetadataRequest]
     val requestVersion = request.header.apiVersion
 
@@ -1131,17 +1114,27 @@ class KafkaApis(val requestChannel: RequestChannel,
         })
     }
 
+    //FIXME Can we avoid all these copies?
     val completeTopicMetadata = topicMetadata ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
 
+    //FIXME Can we get all the nodes for a given listener name?
     val brokers = metadataCache.getAliveBrokers
 
-    trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
-      brokers.mkString(","), request.header.correlationId, request.header.clientId))
+    trace(s"Sending metadata ${completeTopicMetadata.mkString(",")} and brokers ${brokers.mkString(",")} for " +
+      s"correlation id ${request.header.correlationId} to client ${request.header.clientId}")
+
+    def toMetadataResponseBroker(broker: Broker): Option[MetadataResponseBroker] =
+      broker.endPointsMap.get(request.context.listenerName).map(endpoint =>
+        new MetadataResponseBroker()
+          .setNodeId(id)
+          .setHost(endpoint.host)
+          .setPort(endpoint.port)
+          .setRack(rack.orNull))
 
     sendResponseMaybeThrottle(request, requestThrottleMs =>
        MetadataResponse.prepareResponse(
          requestThrottleMs,
-         brokers.flatMap(_.getNode(request.context.listenerName)).asJava,
+         brokers.flatMap(toMetadataResponseBroker).asJava,
          clusterId,
          metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
          completeTopicMetadata.asJava,
