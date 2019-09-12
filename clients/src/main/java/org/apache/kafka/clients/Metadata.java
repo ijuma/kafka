@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.MetadataRequest;
@@ -292,29 +293,31 @@ public class Metadata implements Closeable {
                                                  Predicate<MetadataResponse.TopicMetadata> topicsToRetain) {
         Set<String> internalTopics = new HashSet<>();
         List<MetadataCache.PartitionInfoAndEpoch> partitions = new ArrayList<>();
-        for (MetadataResponse.TopicMetadata metadata : metadataResponse.topicMetadata()) {
-            if (!topicsToRetain.test(metadata))
+        for (MetadataResponseData.MetadataResponseTopic topic : metadataResponse.data().topics()) {
+            if (!topicsToRetain.test(topic))
                 continue;
 
-            if (metadata.error() == Errors.NONE) {
-                if (metadata.isInternal())
-                    internalTopics.add(metadata.topic());
-                for (MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
+            Errors topicError = Errors.forCode(topic.errorCode());
+            if (topicError == Errors.NONE) {
+                if (topic.isInternal())
+                    internalTopics.add(topic.name());
+                for (MetadataResponseData.MetadataResponsePartition partitionMetadata : topic.partitions()) {
 
                     // Even if the partition's metadata includes an error, we need to handle the update to catch new epochs
-                    updatePartitionInfo(metadata.topic(), partitionMetadata, partitionInfo -> {
+                    updatePartitionInfo(topic.name(), partitionMetadata, partitionInfo -> {
                         int epoch = partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH);
                         partitions.add(new MetadataCache.PartitionInfoAndEpoch(partitionInfo, epoch));
                     });
 
-                    if (partitionMetadata.error().exception() instanceof InvalidMetadataException) {
+                    Errors partitionError = Errors.forCode(partitionMetadata.errorCode());
+                    if (partitionError.exception() instanceof InvalidMetadataException) {
                         log.debug("Requesting metadata update for partition {} due to error {}",
-                                new TopicPartition(metadata.topic(), partitionMetadata.partition()), partitionMetadata.error());
+                                new TopicPartition(topic.name(), partitionMetadata.partitionIndex()), partitionError);
                         requestUpdate();
                     }
                 }
-            } else if (metadata.error().exception() instanceof InvalidMetadataException) {
-                log.debug("Requesting metadata update for topic {} due to error {}", metadata.topic(), metadata.error());
+            } else if (topicError.exception() instanceof InvalidMetadataException) {
+                log.debug("Requesting metadata update for topic {} due to error {}", topic.name(), topicError);
                 requestUpdate();
             }
         }

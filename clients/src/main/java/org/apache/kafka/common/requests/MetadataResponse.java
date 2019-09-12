@@ -74,6 +74,10 @@ public class MetadataResponse extends AbstractResponse {
         return data.toStruct(version);
     }
 
+    public MetadataResponseData data() {
+        return data;
+    }
+
     @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();
