@@ -236,6 +236,7 @@ public class MemoryRecords extends AbstractRecords {
         return filterResult;
     }
 
+    //TODO Pass logconfig compression type and logconfig message format and use that within the method
     private static MemoryRecordsBuilder buildRetainedRecordsInto(RecordBatch originalBatch,
                                                                  List<Record> retainedRecords,
                                                                  ByteBufferOutputStream bufferOutputStream) {
