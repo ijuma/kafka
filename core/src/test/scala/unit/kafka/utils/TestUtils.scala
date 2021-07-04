@@ -69,6 +69,7 @@ import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.jupiter.api.Assertions._
 
+import scala.annotation.nowarn
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Map, Seq, mutable}
 import scala.concurrent.duration.FiniteDuration
@@ -324,6 +325,14 @@ object TestUtils extends Logging {
     props.put(KafkaConfig.DefaultReplicationFactorProp, defaultReplicationFactor.toString)
 
     props
+  }
+
+  @nowarn("cat=deprecation")
+  def setIbpAndMessageFormatVersions(config: Properties, version: ApiVersion): Unit = {
+    config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, version.version)
+    // the log message format version config is ignored and a warning is logged if the IBP is 3.0 or higher
+    if (version < KAFKA_3_0_IV1)
+      config.setProperty(KafkaConfig.LogMessageFormatVersionProp, version.version)
   }
 
   /**
