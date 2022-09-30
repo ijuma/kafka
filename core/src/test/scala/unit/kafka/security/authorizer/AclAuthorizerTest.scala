@@ -741,6 +741,7 @@ class AclAuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val acl4 = new AclBinding(prefixedResource, new AccessControlEntry(wildcardPrincipal.toString, WildcardHost, READ, ALLOW))
 
     aclAuthorizer.createAcls(requestContext, List(acl1, acl2, acl3, acl4).asJava)
+    Thread.sleep(5000)
     assertEquals(Set(acl1, acl2, acl3, acl4), aclAuthorizer.acls(AclBindingFilter.ANY).asScala.toSet)
     assertEquals(Set(acl1, acl2), aclAuthorizer.acls(new AclBindingFilter(resource1.toFilter, AccessControlEntryFilter.ANY)).asScala.toSet)
     assertEquals(Set(acl4), aclAuthorizer.acls(new AclBindingFilter(prefixedResource.toFilter, AccessControlEntryFilter.ANY)).asScala.toSet)
@@ -752,6 +753,7 @@ class AclAuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
       new AclBindingFilter(resource2.toFilter, AccessControlEntryFilter.ANY),
       new AclBindingFilter(new ResourcePatternFilter(TOPIC, "baz", PatternType.ANY), AccessControlEntryFilter.ANY))
     val deleteResults = aclAuthorizer.deleteAcls(requestContext, filters.asJava).asScala.map(_.toCompletableFuture.get)
+    Thread.sleep(20000)
     assertEquals(List.empty, deleteResults.filter(_.exception.isPresent))
     filters.indices.foreach { i =>
       assertEquals(Set.empty, deleteResults(i).aclBindingDeleteResults.asScala.toSet.filter(_.exception.isPresent))
