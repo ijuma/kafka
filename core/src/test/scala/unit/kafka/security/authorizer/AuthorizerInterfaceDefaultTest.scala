@@ -21,47 +21,67 @@ import java.{lang, util}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.server.QuorumTestHarness
-import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.acl._
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.controller.QuorumController
+import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.server.authorizer._
-import org.apache.zookeeper.client.ZKClientConfig
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
+import java.util.Properties
+
+/**
+ * Tests the default method implementations in Authorizer. We do that by ensuring they are not
+ * overridden in this test
+ */
 class AuthorizerInterfaceDefaultTest extends QuorumTestHarness with BaseAuthorizerTest {
 
-  private val interfaceDefaultAuthorizer = new DelegateAuthorizer
-
-  override def authorizer: Authorizer = interfaceDefaultAuthorizer
+  private var interfaceDefaultAuthorizer: Authorizer = _
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
+    interfaceDefaultAuthorizer = new DelegateAuthorizer(createUnderlyingAuthorizer)
+  }
 
-    // Increase maxUpdateRetries to avoid transient failures
-    interfaceDefaultAuthorizer.authorizer.maxUpdateRetries = Int.MaxValue
+  override def authorizer: Authorizer = interfaceDefaultAuthorizer
 
-    val props = TestUtils.createBrokerConfig(0, zkConnect)
-    props.put(AclAuthorizer.SuperUsersProp, superUsers)
+  override protected def kraftControllerConfigs(): Seq[Properties] = {
+    val props = new Properties
+    props.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
+    props.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, superUsers)
+    Seq(props)
+  }
 
-    config = KafkaConfig.fromProps(props)
-    interfaceDefaultAuthorizer.authorizer.configure(config.originals)
+  def createUnderlyingAuthorizer: Authorizer = {
+    if (isKRaftTest()) {
+      TestUtils.waitUntilTrue(() => !controllerServer.controller.asInstanceOf[QuorumController].needToCompleteAuthorizerLoad, "fooo")
+      controllerServer.authorizer.get
+    } else {
+      val aclAuthorizer = new AclAuthorizer
 
-    zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,
-      Time.SYSTEM, "kafka.test", "AuthorizerInterfaceDefaultTest", new ZKClientConfig,
-      "AuthorizerInterfaceDefaultTest")
+      // Increase maxUpdateRetries to avoid transient failures
+      aclAuthorizer.maxUpdateRetries = Int.MaxValue
+
+      val props = TestUtils.createBrokerConfig(0, zkConnect)
+      props.put(AclAuthorizer.SuperUsersProp, superUsers)
+      val config = KafkaConfig.fromProps(props)
+      aclAuthorizer.configure(config.originals)
+
+      aclAuthorizer
+    }
   }
 
   @AfterEach
   override def tearDown(): Unit = {
     interfaceDefaultAuthorizer.close()
-    zooKeeperClient.close()
     super.tearDown()
   }
 
-  class DelegateAuthorizer extends Authorizer {
-    val authorizer = new AclAuthorizer
+  /*
+   * We intentionally do not override the methods that have a default implementation in Authorizer.
+   */
+  class DelegateAuthorizer(authorizer: Authorizer) extends Authorizer {
 
     override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {
       authorizer.start(serverInfo)

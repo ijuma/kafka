@@ -19,10 +19,8 @@ package kafka.security.authorizer
 
 import java.net.InetAddress
 import java.util.UUID
-
 import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
-import kafka.server.KafkaConfig
-import kafka.zookeeper.ZooKeeperClient
+import kafka.utils.TestInfoUtils
 import org.apache.kafka.common.acl.AclOperation.{ALL, READ, WRITE}
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation}
@@ -36,7 +34,8 @@ import org.apache.kafka.common.resource.{ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.authorizer.{AuthorizationResult, Authorizer}
 import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 
@@ -49,12 +48,10 @@ trait BaseAuthorizerTest {
   val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
   val requestContext: RequestContext = newRequestContext(principal, InetAddress.getByName("192.168.0.1"))
   val superUserName = "superuser1"
-  var config: KafkaConfig = _
-  var zooKeeperClient: ZooKeeperClient = _
-  var resource: ResourcePattern = _
 
-  @Test
-  def testAuthorizeByResourceTypeMultipleAddAndRemove(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAuthorizeByResourceTypeMultipleAddAndRemove(quorum: String): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
     val resource1 = new ResourcePattern(TOPIC, "sb1" + UUID.randomUUID(), LITERAL)
@@ -87,8 +84,9 @@ trait BaseAuthorizerTest {
     }
   }
 
-  @Test
-  def testAuthorizeByResourceTypeIsolationUnrelatedDenyWontDominateAllow(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAuthorizeByResourceTypeIsolationUnrelatedDenyWontDominateAllow(quorum: String): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user2")
     val host1 = InetAddress.getByName("192.168.1.1")
@@ -124,8 +122,9 @@ trait BaseAuthorizerTest {
       "User1 from host2 should have READ access to at least one topic")
   }
 
-  @Test
-  def testAuthorizeByResourceTypeDenyTakesPrecedence(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAuthorizeByResourceTypeDenyTakesPrecedence(quorum: String): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
     val resource1 = new ResourcePattern(TOPIC, "sb1" + UUID.randomUUID(), LITERAL)
@@ -143,8 +142,9 @@ trait BaseAuthorizerTest {
       "User1 from host1 should not have WRITE access to any topic")
   }
 
-  @Test
-  def testAuthorizeByResourceTypePrefixedResourceDenyDominate(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAuthorizeByResourceTypePrefixedResourceDenyDominate(quorum: String): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
     val a = new ResourcePattern(GROUP, "a", PREFIXED)
@@ -178,8 +178,9 @@ trait BaseAuthorizerTest {
       "User1 from host1 still should not have READ access to any group")
   }
 
-  @Test
-  def testAuthorizeByResourceTypeWildcardResourceDenyDominate(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAuthorizeByResourceTypeWildcardResourceDenyDominate(quorum: String): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
     val wildcard = new ResourcePattern(GROUP, ResourcePattern.WILDCARD_RESOURCE, LITERAL)
@@ -207,8 +208,9 @@ trait BaseAuthorizerTest {
       "User1 from host1 still should not have WRITE access to any group")
   }
 
-  @Test
-  def testAuthorizeByResourceTypeWithAllOperationAce(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAuthorizeByResourceTypeWithAllOperationAce(quorum: String): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
     val resource1 = new ResourcePattern(TOPIC, "sb1" + UUID.randomUUID(), LITERAL)
@@ -229,8 +231,9 @@ trait BaseAuthorizerTest {
       "User1 from host1 now should not have READ access to any topic")
   }
 
-  @Test
-  def testAuthorizeByResourceTypeWithAllHostAce(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAuthorizeByResourceTypeWithAllHostAce(quorum: String): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
     val host2 = InetAddress.getByName("192.168.1.2")
@@ -270,8 +273,9 @@ trait BaseAuthorizerTest {
       "User1 from host2 now shouldn't have READ access to any topic")
   }
 
-  @Test
-  def testAuthorizeByResourceTypeWithAllPrincipalAce(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAuthorizeByResourceTypeWithAllPrincipalAce(quorum: String): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user2")
     val allUser = AclEntry.WildcardPrincipalString
@@ -311,8 +315,9 @@ trait BaseAuthorizerTest {
       "User2 from host1 now shouldn't have READ access to any topic")
   }
 
-  @Test
-  def testAuthorzeByResourceTypeSuperUserHasAccess(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAuthorizeByResourceTypeSuperUserHasAccess(quorum: String): Unit = {
     val denyAllAce = new AccessControlEntry(WildcardPrincipalString, WildcardHost, AclOperation.ALL, DENY)
     val superUser1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, superUserName)
     val host1 = InetAddress.getByName("192.0.4.4")

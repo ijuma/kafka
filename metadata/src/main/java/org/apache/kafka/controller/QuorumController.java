@@ -1645,7 +1645,7 @@ public final class QuorumController implements Controller {
      * True if we need to complete the authorizer initial load.
      * This must be accessed only by the event queue thread.
      */
-    private boolean needToCompleteAuthorizerLoad;
+    public boolean needToCompleteAuthorizerLoad;
 
     /**
      * If we have called scheduleWrite, this is the last offset we got back from it.

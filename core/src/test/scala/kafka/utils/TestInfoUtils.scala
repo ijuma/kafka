@@ -37,7 +37,7 @@ object TestInfoUtils {
       } else if (testInfo.getDisplayName().contains("quorum=zk")) {
         false
       } else {
-        throw new RuntimeException(s"Unknown quorum value")
+        throw new RuntimeException(s"Unknown quorum value: " + testInfo.getDisplayName())
       }
     } else {
       false
