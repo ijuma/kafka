@@ -31,7 +31,6 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.util.Objects;
 import java.util.OptionalInt;
-import java.util.concurrent.Callable;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -39,6 +38,10 @@ import java.util.concurrent.locks.ReentrantLock;
  * The abstract index class which holds entry format agnostic methods.
  */
 public abstract class AbstractIndex {
+
+    protected interface Callable<T, E extends Exception> {
+        public T call() throws E;
+    }
 
     private static class BinarySearchResult {
         public final int largestLowerBound;
@@ -426,7 +429,7 @@ public abstract class AbstractIndex {
      * because Windows or z/OS won't let us resize a file while it is mmapped. As a result we have to force unmap it
      * and this requires synchronizing reads.
      */
-    protected final <T> T maybeLock(Lock lock, Callable<T> callable) throws Exception {
+    protected final <T, E extends Exception> T maybeLock(Lock lock, Callable<T, E> callable) throws E {
         if (OperatingSystem.IS_WINDOWS || OperatingSystem.IS_ZOS)
             lock.lock();
         try {
