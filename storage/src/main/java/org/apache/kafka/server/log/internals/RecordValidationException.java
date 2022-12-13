@@ -14,35 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
+package org.apache.kafka.server.log.internals;
 
-/**
- * Primitive reference used to pass primitive typed values as parameter-by-reference.
- *
- * This is cheaper than using Atomic references.
- */
-public class PrimitiveRef {
-    public static IntRef ofInt(int value) {
-        return new IntRef(value);
+import java.util.Collections;
+import java.util.List;
+import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.requests.ProduceResponse.RecordError;
+
+public class RecordValidationException extends RuntimeException {
+    private final ApiException invalidException;
+    private final List<RecordError> recordErrors;
+
+    public RecordValidationException(ApiException invalidException, List<RecordError> recordErrors) {
+        super(invalidException);
+        this.invalidException = invalidException;
+        this.recordErrors = Collections.unmodifiableList(recordErrors);
     }
 
-    public static LongRef ofLong(long value) {
-        return new LongRef(value);
+    public ApiException invalidException() {
+        return invalidException;
     }
 
-    public static class IntRef {
-        public int value;
-
-        IntRef(int value) {
-            this.value = value;
-        }
-    }
-
-    public static class LongRef {
-        public long value;
-
-        LongRef(long value) {
-            this.value = value;
-        }
+    public List<RecordError> recordErrors() {
+        return recordErrors;
     }
 }
