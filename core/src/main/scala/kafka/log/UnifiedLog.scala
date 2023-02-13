@@ -1855,26 +1855,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 }
 
 object UnifiedLog extends Logging {
-  val LogFileSuffix = LogFileUtils.LOG_FILE_SUFFIX
 
-  val IndexFileSuffix = LogFileUtils.INDEX_FILE_SUFFIX
-
-  val TimeIndexFileSuffix = LogFileUtils.TIME_INDEX_FILE_SUFFIX
-
-  val TxnIndexFileSuffix = LogFileUtils.TXN_INDEX_FILE_SUFFIX
-
-  val CleanedFileSuffix = LocalLog.CleanedFileSuffix
-
-  val SwapFileSuffix = LocalLog.SwapFileSuffix
-
-  val DeleteDirSuffix = LocalLog.DeleteDirSuffix
-
-  val FutureDirSuffix = LocalLog.FutureDirSuffix
-
-  private[log] val DeleteDirPattern = LocalLog.DeleteDirPattern
-  private[log] val FutureDirPattern = LocalLog.FutureDirPattern
-
-  val UnknownOffset = LocalLog.UnknownOffset
+  val UnknownOffset = -1
 
   def isRemoteLogEnabled(remoteStorageSystemEnable: Boolean,
                          config: LogConfig,
@@ -1947,6 +1929,7 @@ object UnifiedLog extends Logging {
       logOffsetsListener)
   }
 
+<<<<<<< HEAD
   def logDeleteDirName(topicPartition: TopicPartition): String = LocalLog.logDeleteDirName(topicPartition)
 
   def logFutureDirName(topicPartition: TopicPartition): String = LocalLog.logFutureDirName(topicPartition)
@@ -1960,10 +1943,6 @@ object UnifiedLog extends Logging {
   def sizeInBytes(segments: util.Collection[LogSegment]): Long = LogSegments.sizeInBytes(segments)
 
   def parseTopicPartitionName(dir: File): TopicPartition = LocalLog.parseTopicPartitionName(dir)
-
-  private[log] def isIndexFile(file: File): Boolean = LocalLog.isIndexFile(file)
-
-  private[log] def isLogFile(file: File): Boolean = LocalLog.isLogFile(file)
 
   private def loadProducersFromRecords(producerStateManager: ProducerStateManager, records: Records): Unit = {
     val loadedProducers = mutable.Map.empty[Long, ProducerAppendInfo]

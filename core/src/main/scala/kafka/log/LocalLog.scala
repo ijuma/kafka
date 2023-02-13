@@ -595,26 +595,6 @@ class LocalLog(@volatile private var _dir: File,
  */
 object LocalLog extends Logging {
 
-  /** a file that is scheduled to be deleted */
-  private[log] val DeletedFileSuffix = LogFileUtils.DELETED_FILE_SUFFIX
-
-  /** A temporary file that is being used for log cleaning */
-  private[log] val CleanedFileSuffix = ".cleaned"
-
-  /** A temporary file used when swapping files into the log */
-  private[log] val SwapFileSuffix = ".swap"
-
-  /** a directory that is scheduled to be deleted */
-  private[log] val DeleteDirSuffix = "-delete"
-
-  /** a directory that is used for future partition */
-  private[log] val FutureDirSuffix = "-future"
-
-  private[log] val DeleteDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$DeleteDirSuffix")
-  private[log] val FutureDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$FutureDirSuffix")
-
-  private[log] val UnknownOffset = -1L
-
   /**
    * Return a directory name to rename the log directory to for async deletion.
    * The name will be in the following format: "topic-partitionId.uniqueId-delete".

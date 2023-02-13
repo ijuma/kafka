@@ -19,7 +19,6 @@ package kafka.log
 
 import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
-import kafka.log.UnifiedLog.{CleanedFileSuffix, SwapFileSuffix, isIndexFile, isLogFile, offsetFromFile}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidOffsetException
@@ -109,8 +108,8 @@ class LogLoader(
     // We store segments that require renaming in this code block, and do the actual renaming later.
     var minSwapFileOffset = Long.MaxValue
     var maxSwapFileOffset = Long.MinValue
-    swapFiles.filter(f => UnifiedLog.isLogFile(new File(Utils.replaceSuffix(f.getPath, SwapFileSuffix, "")))).foreach { f =>
-      val baseOffset = offsetFromFile(f)
+    swapFiles.filter(f => LocalLog.isLogFile(new File(Utils.replaceSuffix(f.getPath, LogFileUtils.SwapFileSuffix, "")))).foreach { f =>
+      val baseOffset = LogFileUtils.offsetFromFile(f)
       val segment = LogSegment.open(f.getParentFile,
         baseOffset,
         config,
@@ -118,7 +117,7 @@ class LogLoader(
         false,
         0,
         false,
-        UnifiedLog.SwapFileSuffix)
+        LogFileUtils.SwapFileSuffix)
       info(s"Found log file ${f.getPath} from interrupted swap operation, which is recoverable from ${UnifiedLog.SwapFileSuffix} files by renaming.")
       minSwapFileOffset = Math.min(segment.baseOffset, minSwapFileOffset)
       maxSwapFileOffset = Math.max(segment.readNextOffset, maxSwapFileOffset)
@@ -129,8 +128,8 @@ class LogLoader(
     // before shutting down the broker.
     for (file <- dir.listFiles if file.isFile) {
       try {
-        if (!file.getName.endsWith(SwapFileSuffix)) {
-          val offset = offsetFromFile(file)
+        if (!file.getName.endsWith(LogFileUtils.SwapFileSuffix)) {
+          val offset = LogFileUtils.offsetFromFile(file)
           if (offset >= minSwapFileOffset && offset < maxSwapFileOffset) {
             info(s"Deleting segment files ${file.getName} that is compacted but has not been deleted yet.")
             file.delete()
@@ -145,9 +144,9 @@ class LogLoader(
 
     // Third pass: rename all swap files.
     for (file <- dir.listFiles if file.isFile) {
-      if (file.getName.endsWith(SwapFileSuffix)) {
-        info(s"Recovering file ${file.getName} by renaming from ${UnifiedLog.SwapFileSuffix} files.")
-        file.renameTo(new File(Utils.replaceSuffix(file.getPath, UnifiedLog.SwapFileSuffix, "")))
+      if (file.getName.endsWith(LogFileUtils.SwapFileSuffix)) {
+        info(s"Recovering file ${file.getName} by renaming from ${LogFileUtils.SwapFileSuffix} files.")
+        file.renameTo(new File(Utils.replaceSuffix(file.getPath, LogFileUtils.SwapFileSuffix, "")))
       }
     }
 

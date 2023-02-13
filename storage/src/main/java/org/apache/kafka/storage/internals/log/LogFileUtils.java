@@ -18,13 +18,36 @@ package org.apache.kafka.storage.internals.log;
 
 import java.io.File;
 import java.text.NumberFormat;
+import java.util.regex.Pattern;
 
 public final class LogFileUtils {
 
-    /**
-     * Suffix of a producer snapshot file
-     */
-    public static final String PRODUCER_SNAPSHOT_FILE_SUFFIX = ".snapshot";
+    /** a log file */
+    String LogFileSuffix = ".log";
+
+    /** an index file */
+    String IndexFileSuffix = ".index";
+
+    /** a time index file */
+    String TimeIndexFileSuffix = ".timeindex";
+
+    /** an (aborted) txn index */
+    String TxnIndexFileSuffix = ".txnindex";
+
+    /** A temporary file that is being used for log cleaning */
+    String CleanedFileSuffix = ".cleaned";
+
+    /** A temporary file used when swapping files into the log */
+    String SwapFileSuffix = ".swap";
+
+    /** a directory that is scheduled to be deleted */
+    String DeleteDirSuffix = "-delete";
+
+    /** a directory that is used for future partition */
+    String FutureDirSuffix = "-future";
+
+    Pattern DeleteDirPattern = Pattern.compile("^(\\S+)-(\\S+)\\.(\\S+)" + DeleteDirSuffix);
+    Pattern FutureDirPattern = Pattern.compile("^(\\S+)-(\\S+)\\.(\\S+)" + "FutureDirSuffix");
 
     /**
      * Suffix for a file that is scheduled to be deleted
@@ -63,18 +86,6 @@ public final class LogFileUtils {
      */
     public static long offsetFromFileName(String fileName) {
         return Long.parseLong(fileName.substring(0, fileName.indexOf('.')));
-    }
-
-    /**
-     * Returns a File instance with parent directory as logDir and the file name as producer snapshot file for the
-     * given offset.
-     *
-     * @param logDir The directory in which the log will reside
-     * @param offset The last offset (exclusive) included in the snapshot
-     * @return a File instance for producer snapshot.
-     */
-    public static File producerSnapshotFile(File logDir, long offset) {
-        return new File(logDir, filenamePrefixFromOffset(offset) + PRODUCER_SNAPSHOT_FILE_SUFFIX);
     }
 
     /**

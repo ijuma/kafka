@@ -73,6 +73,11 @@ public class ProducerStateManager {
 
     public static final long LATE_TRANSACTION_BUFFER_MS = 5 * 60 * 1000;
 
+    /**
+     * Suffix of a producer snapshot file
+     */
+    private static final String PRODUCER_SNAPSHOT_FILE_SUFFIX = ".snapshot";
+
     private static final short PRODUCER_SNAPSHOT_VERSION = 1;
     private static final String VERSION_FIELD = "version";
     private static final String CRC_FIELD = "crc";
@@ -467,7 +472,7 @@ public class ProducerStateManager {
     public void takeSnapshot() throws IOException {
         // If not a new offset, then it is not worth taking another snapshot
         if (lastMapOffset > lastSnapOffset) {
-            SnapshotFile snapshotFile = new SnapshotFile(LogFileUtils.producerSnapshotFile(logDir, lastMapOffset));
+            SnapshotFile snapshotFile = new SnapshotFile(producerSnapshotFile(logDir, lastMapOffset));
             long start = time.hiResClockMs();
             writeSnapshot(snapshotFile.file(), producers);
             log.info("Wrote producer snapshot at offset {} with {} producer ids in {} ms.", lastMapOffset,
@@ -721,8 +726,21 @@ public class ProducerStateManager {
     }
 
     private static boolean isSnapshotFile(Path path) {
-        return Files.isRegularFile(path) && path.getFileName().toString().endsWith(LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX);
+        return Files.isRegularFile(path) && path.getFileName().toString().endsWith(PRODUCER_SNAPSHOT_FILE_SUFFIX);
     }
+
+    /**
+     * Returns a File instance with parent directory as logDir and the file name as producer snapshot file for the
+     * given offset.
+     *
+     * @param logDir The directory in which the log will reside
+     * @param offset The last offset (exclusive) included in the snapshot
+     * @return a File instance for producer snapshot.
+     */
+    private static File producerSnapshotFile(File logDir, long offset) {
+        return new File(logDir, LogFileUtils.filenamePrefixFromOffset(offset) + PRODUCER_SNAPSHOT_FILE_SUFFIX);
+    }
+
 
     // visible for testing
     public static List<SnapshotFile> listSnapshotFiles(File dir) throws IOException {
