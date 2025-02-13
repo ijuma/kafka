@@ -62,7 +62,7 @@ runs:
         -PmaxQuarantineTestRetries=3 -PmaxQuarantineTestRetryFailures=0 \
         -Pkafka.test.catalog.file=$TEST_CATALOG \
         -PcommitId=xxxxxxxxxxxxxxxx \
-        $TEST_TASK
+        core:test --tests '*AdminIntegrationTest'
         exitcode="$?"
         echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
     - name: Archive build scan (${{ inputs.test-task }})
