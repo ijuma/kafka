@@ -27,6 +27,9 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -35,6 +38,8 @@ import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 
 
 public class ActivationRecordsGenerator {
+
+    private static final Logger log = LoggerFactory.getLogger(ActivationRecordsGenerator.class);
 
     static ControllerResult<Void> recordsForEmptyLog(
         Consumer<String> activationMessageConsumer,
@@ -159,12 +164,14 @@ public class ActivationRecordsGenerator {
         int defaultMinInSyncReplicas
     ) {
         if (isEmpty) {
+            log.warn("Generating activation records, log is empty, bootstrap metadata version: " + bootstrapMetadata.metadataVersion());
             return recordsForEmptyLog(activationMessageConsumer,
                     transactionStartOffset,
                     bootstrapMetadata,
                     bootstrapMetadata.metadataVersion(),
                     defaultMinInSyncReplicas);
         } else {
+            log.warn("Generating activation records, log is not empty, current metadata version: " + curMetadataVersion);
             return recordsForNonEmptyLog(activationMessageConsumer,
                     transactionStartOffset,
                     curMetadataVersion);
