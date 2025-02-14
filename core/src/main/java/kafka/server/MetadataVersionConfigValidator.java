@@ -52,7 +52,7 @@ public class MetadataVersionConfigValidator implements MetadataPublisher {
     ) {
         if (delta.featuresDelta() != null) {
             if (delta.metadataVersionChanged().isPresent()) {
-                onMetadataVersionChanged(newImage.features().metadataVersion());
+                onMetadataVersionChanged(newImage.features().metadataVersion().orElseThrow(() -> new IllegalArgumentException("newImage.features.metadataVersion is empty.")));
             }
         }
     }

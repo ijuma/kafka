@@ -24,6 +24,7 @@ import org.apache.kafka.server.common.MetadataVersionTestUtils;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.Optional;
 
 import static java.util.Collections.emptyMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;

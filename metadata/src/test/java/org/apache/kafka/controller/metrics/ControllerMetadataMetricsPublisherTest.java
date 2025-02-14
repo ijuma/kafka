@@ -146,7 +146,7 @@ public class ControllerMetadataMetricsPublisherTest {
             MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
             ImageReWriter writer = new ImageReWriter(delta);
             IMAGE1.write(writer, new ImageWriterOptions.Builder().
-                    setMetadataVersion(delta.image().features().metadataVersion()).
+                    setMetadataVersion(delta.image().features().metadataVersion().get()).
                     build());
             env.publisher.onMetadataUpdate(delta, IMAGE1, fakeManifest(true));
             assertEquals(0, env.metrics.activeBrokerCount());

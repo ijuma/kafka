@@ -68,6 +68,8 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
  * loader is closed will itself be closed.
  */
 public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>, AutoCloseable {
+    private final int nodeId;
+
     public static class Builder {
         private int nodeId = -1;
         private String threadNamePrefix = "";
@@ -208,6 +210,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         this.uninitializedPublishers = new LinkedHashMap<>();
         this.publishers = new LinkedHashMap<>();
         this.image = MetadataImage.EMPTY;
+        this.nodeId = nodeId;
         this.batchLoader = new MetadataBatchLoader(
             logContext,
             time,
@@ -293,8 +296,9 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 setImage(MetadataImage.EMPTY).
                 build();
         ImageReWriter writer = new ImageReWriter(delta);
+        var metadataVersion = image.features().metadataVersion().orElseThrow(() -> new IllegalArgumentException("image.features.metadataVersion is empty for node " + nodeId));
         image.write(writer, new ImageWriterOptions.Builder().
-                setMetadataVersion(image.features().metadataVersion()).
+                setMetadataVersion(metadataVersion).
                 build());
         // ImageReWriter#close invokes finishSnapshot, so we don't need to invoke it here.
         SnapshotManifest manifest = new SnapshotManifest(
@@ -347,7 +351,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             }
         }
         metrics.updateLastAppliedImageProvenance(image.provenance());
-        metrics.setCurrentMetadataVersion(image.features().metadataVersion());
+        var metadataVersion = image.features().metadataVersion().orElseThrow(() -> new IllegalArgumentException("image.features.metadataVersion is empty"));
+        metrics.setCurrentMetadataVersion(metadataVersion);
         if (!uninitializedPublishers.isEmpty()) {
             scheduleInitializeNewPublishers(0);
         }

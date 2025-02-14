@@ -90,8 +90,8 @@ public class BrokerRegistrationTracker implements MetadataPublisher {
             }
         }
         if (checkBrokerRegistration) {
-            if (brokerRegistrationNeedsRefresh(newImage.features().metadataVersion(),
-                    delta.clusterDelta().broker(id))) {
+            var metadataVersion = newImage.features().metadataVersion().orElseThrow(() -> new IllegalArgumentException("newImage.features.metadataVersion is empty"));
+            if (brokerRegistrationNeedsRefresh(metadataVersion, delta.clusterDelta().broker(id))) {
                 refreshRegistrationCallback.run();
             }
         }

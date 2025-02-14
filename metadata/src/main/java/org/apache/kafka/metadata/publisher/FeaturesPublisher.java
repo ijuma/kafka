@@ -55,7 +55,8 @@ public class FeaturesPublisher implements MetadataPublisher {
         LoaderManifest manifest
     ) {
         if (delta.featuresDelta() != null) {
-            FinalizedFeatures newFinalizedFeatures = new FinalizedFeatures(newImage.features().metadataVersion(),
+            var metadataVersion = newImage.features().metadataVersion().orElseThrow(() -> new IllegalArgumentException("newImage.features.metadataVersion is empty"));
+            FinalizedFeatures newFinalizedFeatures = new FinalizedFeatures(metadataVersion,
                     newImage.features().finalizedVersions(),
                     newImage.provenance().lastContainedOffset()
             );

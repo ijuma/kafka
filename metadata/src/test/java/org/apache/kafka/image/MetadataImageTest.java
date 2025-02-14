@@ -93,7 +93,7 @@ public class MetadataImageTest {
         assertEquals(IMAGE2, DELTA1.apply(IMAGE2.provenance()));
         // check image1 + delta1 = image2, since records for image1 + delta1 might differ from records from image2
         ImageWriterOptions options = new ImageWriterOptions.Builder()
-            .setMetadataVersion(IMAGE1.features().metadataVersion())
+            .setMetadataVersion(IMAGE1.features().metadataVersion().get())
             .build();
         List<ApiMessageAndVersion> records = getImageRecords(IMAGE1, options);
         records.addAll(FeaturesImageTest.DELTA1_RECORDS);
@@ -114,9 +114,9 @@ public class MetadataImageTest {
     }
 
     private static void testToImage(MetadataImage image) {
-        testToImage(image, new ImageWriterOptions.Builder()
-            .setMetadataVersion(image.features().metadataVersion())
-            .build(), Optional.empty());
+        var builder = new ImageWriterOptions.Builder();
+        image.features().metadataVersion().ifPresent(builder::setMetadataVersion);
+        testToImage(image, builder.build(), Optional.empty());
     }
 
     static void testToImage(MetadataImage image, ImageWriterOptions options, Optional<List<ApiMessageAndVersion>> fromRecords) {

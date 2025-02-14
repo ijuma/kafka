@@ -365,7 +365,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         long currentTimeMs
     ) {
         state.highWatermark().ifPresent(highWatermark -> {
-            logger.debug("Leader high watermark updated to {}", highWatermark);
+            logger.debug("Leader high watermark updated to {}", highWatermark, new Throwable());
             log.updateHighWatermark(highWatermark);
 
             // Notify the add and remove voter handlers that the HWM has been updated in case there are

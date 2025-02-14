@@ -144,10 +144,11 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
             log.error("Not generating {} because it already exists.", provenance.snapshotName());
             return;
         }
+        var metadataVersion = image.features().metadataVersion().orElseThrow(() -> new IllegalArgumentException("image.features.metadataVersion is empty"));
         RaftSnapshotWriter writer = new RaftSnapshotWriter(snapshotWriter.get(), batchSize);
         try {
             image.write(writer, new ImageWriterOptions.Builder().
-                    setMetadataVersion(image.features().metadataVersion()).
+                    setMetadataVersion(metadataVersion).
                     build());
             writer.close(true);
             metrics.setLatestSnapshotGeneratedTimeMs(time.milliseconds());

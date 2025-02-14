@@ -100,7 +100,7 @@ public final class FeaturesDelta {
 
         final MetadataVersion metadataVersion;
         if (metadataVersionChange == null) {
-            metadataVersion = image.metadataVersion();
+            metadataVersion = image.metadataVersion().orElseThrow(() -> new IllegalStateException("image.metadataVersion is empty"));
         } else {
             metadataVersion = metadataVersionChange;
         }

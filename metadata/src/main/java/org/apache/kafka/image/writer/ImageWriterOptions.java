@@ -38,7 +38,7 @@ public final class ImageWriterOptions {
         }
 
         public Builder(MetadataImage image) {
-            this.metadataVersion = image.features().metadataVersion();
+            this.metadataVersion = image.features().metadataVersion().orElseThrow(() -> new IllegalArgumentException("image.features.metadataVersion is empty"));
         }
 
         public Builder setMetadataVersion(MetadataVersion metadataVersion) {
